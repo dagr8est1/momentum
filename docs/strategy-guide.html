@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momentum Strategy — Overview &amp; Architecture Guide</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f6f7f9;
+    --text: #1c1f26;
+    --text-dim: #565d6b;
+    --border: #e2e5eb;
+    --accent: #1a5fb4;
+    --accent-bg: #eaf1fb;
+    --code-bg: #f0f2f5;
+    --good: #1a7a3c;
+    --warn: #a3590b;
+    --card-shadow: 0 1px 3px rgba(20,24,32,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161b;
+      --bg-alt: #1b1e25;
+      --text: #e7e9ee;
+      --text-dim: #9aa2b1;
+      --border: #2b2f3a;
+      --accent: #6ea8f0;
+      --accent-bg: #17243a;
+      --code-bg: #1f2330;
+      --good: #4fce7d;
+      --warn: #e0a458;
+      --card-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 250px minmax(0,1fr);
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  nav.toc {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 18px;
+    border-right: 1px solid var(--border);
+    font-size: 13.5px;
+  }
+  nav.toc h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    margin: 0 0 12px;
+  }
+  nav.toc a {
+    display: block;
+    color: var(--text-dim);
+    text-decoration: none;
+    padding: 5px 8px;
+    border-radius: 6px;
+    margin-bottom: 2px;
+  }
+  nav.toc a.sub { padding-left: 20px; font-size: 12.5px; }
+  nav.toc a:hover { background: var(--bg-alt); color: var(--text); }
+  main { padding: 40px 48px 100px; min-width: 0; }
+  header.hero {
+    margin-bottom: 40px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  header.hero .kicker {
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  header.hero h1 { font-size: 32px; margin: 8px 0 10px; }
+  header.hero p.lede { color: var(--text-dim); font-size: 16px; max-width: 70ch; }
+  section { margin-bottom: 56px; scroll-margin-top: 20px; }
+  h2 {
+    font-size: 22px;
+    margin: 0 0 6px;
+    padding-top: 6px;
+    scroll-margin-top: 20px;
+  }
+  h2 .num { color: var(--accent); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .section-intro { color: var(--text-dim); margin: 0 0 24px; max-width: 75ch; }
+  h3 { font-size: 16.5px; margin: 28px 0 10px; scroll-margin-top: 20px; }
+  h4 { font-size: 14.5px; margin: 18px 0 8px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  p { margin: 0 0 12px; max-width: 78ch; }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; max-width: 74ch; }
+  li { margin-bottom: 5px; }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.88em;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; }
+  .card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: var(--card-shadow);
+  }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 900px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0 20px; font-size: 13.5px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--text-dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  tr:last-child td { border-bottom: none; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--accent-bg);
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-bg);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .callout.gotcha { border-left-color: var(--warn); background: transparent; border: 1px solid var(--border); border-left: 3px solid var(--warn); }
+  .callout strong { display: block; margin-bottom: 4px; }
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+  .flow-step {
+    display: grid;
+    grid-template-columns: 26px 1fr;
+    gap: 14px;
+    align-items: flex-start;
+    position: relative;
+    padding-bottom: 22px;
+  }
+  .flow-step:last-child { padding-bottom: 0; }
+  .flow-dot {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 12px;
+    z-index: 1;
+  }
+  .flow-step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: 12px; top: 26px;
+    width: 2px; height: calc(100% - 26px);
+    background: var(--border);
+  }
+  .flow-body b { display: block; }
+  .flow-body span { color: var(--text-dim); font-size: 13px; }
+  .module-map {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12.8px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    overflow-x: auto;
+    white-space: pre;
+    line-height: 1.65;
+  }
+  .module-map .dir { color: var(--accent); }
+  .module-map .comment { color: var(--text-dim); }
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    color: var(--text-dim);
+    font-size: 12.5px;
+  }
+  .qa {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+  }
+  .qa .q { font-weight: 600; margin-bottom: 6px; }
+  .qa .q::before { content: "Q · "; color: var(--accent); }
+  .qa .a { color: var(--text-dim); margin: 0; }
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    main { padding: 28px 20px 80px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <nav class="toc">
+    <h2>Contents</h2>
+    <a href="#overview">1 · Strategy Overview</a>
+    <a class="sub" href="#philosophy">Philosophy</a>
+    <a class="sub" href="#universe">Universe</a>
+    <a class="sub" href="#regime">Regime filter</a>
+    <a class="sub" href="#trend">Stock trend filter</a>
+    <a class="sub" href="#scoring">Scoring model</a>
+    <a class="sub" href="#sizing">Sizing &amp; rebalancing</a>
+    <a class="sub" href="#nongoals">Non-goals</a>
+    <a href="#architecture">2 · Code &amp; How to Run</a>
+    <a class="sub" href="#layout-map">Package layout</a>
+    <a class="sub" href="#modules">Module reference</a>
+    <a class="sub" href="#dataflow">Data flow</a>
+    <a class="sub" href="#running">Running it</a>
+    <a class="sub" href="#config-ref">Config reference</a>
+    <a class="sub" href="#testing">Testing</a>
+    <a href="#interview">3 · Interview Prep</a>
+    <a class="sub" href="#decisions">Design decisions</a>
+    <a class="sub" href="#gotchas">Gotchas worth knowing</a>
+    <a class="sub" href="#qa">Likely questions</a>
+  </nav>
+
+  <main>
+    <header class="hero">
+      <div class="kicker">momentum · internal guide</div>
+      <h1>Momentum Investing Strategy</h1>
+      <p class="lede">
+        A cross-sectional + time-series momentum stock-rotation strategy, backtested with
+        <code>backtrader</code> and packaged as an installable, config-driven Python tool.
+        This doc explains <em>what the strategy does and why</em>, then <em>how the codebase
+        is put together</em> — enough to walk through either half in an interview.
+      </p>
+    </header>
+
+    <!-- ============================================================ -->
+    <section id="overview">
+      <h2><span class="num">1</span>Strategy Overview &amp; Rationale</h2>
+      <p class="section-intro">
+        The strategy rotates a fixed universe of large, liquid names into a small, equal-conviction
+        book of trending winners — while stepping fully to cash whenever the broad market itself
+        is in a downtrend. It combines three well-known ideas from the momentum literature rather
+        than inventing a new signal.
+      </p>
+
+      <h3 id="philosophy">Philosophy</h3>
+      <div class="grid-3">
+        <div class="card">
+          <span class="badge">Cross-sectional</span>
+          <p style="margin:0">Rank stocks against each other every period; only hold the strongest relative performers (top&nbsp;5).</p>
+        </div>
+        <div class="card">
+          <span class="badge">Time-series</span>
+          <p style="margin:0">Each holding must also be trending up in absolute terms (price above its own 200-day average) — this is "dual momentum" (Antonacci): relative <em>and</em> absolute trend must agree.</p>
+        </div>
+        <div class="card">
+          <span class="badge">Regime-aware</span>
+          <p style="margin:0">A market-level trend filter (benchmark vs. its 200-day average) can flatten the entire book to cash — the strategy doesn't try to pick winners in a falling market.</p>
+        </div>
+      </div>
+
+      <h3 id="universe">Universe</h3>
+      <p>
+        <code>configs/default.yaml</code> defines a static list of ~140 tickers: mega-cap
+        single names across sectors (tech, healthcare, financials, industrials, staples,
+        energy), sector SPDRs (<code>XLK</code>, <code>XLF</code>, …), factor/style ETFs
+        (<code>MTUM</code>, <code>QUAL</code>, <code>VLUE</code>, <code>USMV</code>), thematic
+        ETFs (<code>ARKK</code>, <code>ICLN</code>, <code>SOXX</code>), international/EM
+        (<code>EFA</code>, <code>EEM</code>, <code>FXI</code>), and bonds/commodities
+        (<code>TLT</code>, <code>GLD</code>, <code>USO</code>). Broad diversity of asset
+        classes means momentum can rotate into whatever regime is actually working —
+        equities, gold, bonds — not just equities.
+      </p>
+      <p>
+        The universe is pluggable: <code>source: static</code> uses the inline ticker list;
+        <code>source: index:sp500</code> instead scrapes current S&amp;P&nbsp;500 constituents
+        from Wikipedia at run time (<code>universe.py</code>).
+      </p>
+
+      <h3 id="regime">Regime filter (portfolio-level)</h3>
+      <p>
+        Every bar, the benchmark's close (default <code>SPY</code>) is compared to its own
+        200-day simple moving average. If the benchmark is <em>below</em> that average, every
+        open position is closed and the strategy holds cash until the benchmark recovers above
+        it. This is the "time-series momentum" half of dual momentum applied at the market
+        level — it's the mechanism that keeps the strategy out of prolonged bear markets rather
+        than fighting them stock-by-stock.
+      </p>
+
+      <h3 id="trend">Stock-level trend filter</h3>
+      <p>
+        Within a bullish regime, a stock is only eligible if its own close is above its
+        200-day SMA (<code>ts_mom_lookback</code>). This is a cheap absolute-momentum gate
+        applied before any relative scoring — a stock ranking well on momentum but trading
+        below its own long-term trend is excluded outright.
+      </p>
+
+      <h3 id="scoring">Scoring model (cross-sectional rank)</h3>
+      <p>Eligible stocks (passed the trend filter, positive momentum) get a blended score combining three signals, each computed by a pure function in <code>scoring.py</code>:</p>
+
+      <table>
+        <tr><th>Signal</th><th>Function</th><th>What it measures</th></tr>
+        <tr>
+          <td><strong>Momentum blend</strong></td>
+          <td><code>momentum_blend(closes, [60,120,252])</code></td>
+          <td>Mean price change over three horizons (~3&nbsp;mo / ~6&nbsp;mo / ~1&nbsp;yr) vs. today — smooths out any single lookback's noise.</td>
+        </tr>
+        <tr>
+          <td><strong>Frog-in-the-Pan (FIP)</strong></td>
+          <td><code>fip_score(returns)</code></td>
+          <td>Fraction of the last 252 days that closed up. Rewards steady, "boring" grinding uptrends over the same total return achieved via a few violent jumps — the academic finding is that gradual-information moves continue more reliably than jump-driven ones.</td>
+        </tr>
+        <tr>
+          <td><strong>Skewness</strong></td>
+          <td><code>skewness_score(closes)</code></td>
+          <td>Skew of the daily log-return distribution over the last 90 days.</td>
+        </tr>
+      </table>
+
+      <div class="card">
+        <h4 style="margin-top:0">Combined score</h4>
+        <pre><code>score = momentum_weight   * momentum_blend
+      + fip_weight        * fip_score
+      + skewness_penalty  * skewness_score</code></pre>
+        <p style="margin:0">Default weights: <code>momentum_weight=0.5</code>, <code>fip_weight=0.5</code>, <code>skewness_penalty=0.5</code>. Stocks are ranked by this score and the top&nbsp;5 are selected.</p>
+      </div>
+
+      <div class="callout gotcha">
+        <strong>Naming vs. behavior — worth knowing cold</strong>
+        Despite being called <code>skewness_penalty</code>, it's added to the score with a
+        <em>positive</em> sign and a positive default weight — so under current defaults, more
+        positively-skewed (jumpier, "lottery-like") return distributions score <em>higher</em>,
+        not lower. If the intent were to genuinely penalize jump-driven moves (as the name
+        suggests, and as some momentum-crash literature would argue), this coefficient would
+        need to be negative. As shipped, it's a configurable tilt, not a penalty — flip the
+        sign in config to actually discourage skew.
+      </div>
+
+      <h3 id="sizing">Position sizing &amp; rebalancing</h3>
+      <ul>
+        <li><strong>Sizing:</strong> inverse-volatility weighting (<code>inverse_vol_weights</code>) across the top&nbsp;5 — lower-volatility names get proportionally larger allocations, a simple risk-parity tilt within the concentrated book. Zero/negative volatility is excluded from the normalization rather than dividing by zero.</li>
+        <li><strong>Rebalance trigger:</strong> fires immediately if top-5 <em>membership</em> changes, <em>or</em> on a periodic schedule (default: <code>monthly</code>) even if membership is unchanged — the periodic trigger exists specifically so inverse-vol weights get refreshed as relative volatility drifts, even when the same 5 names keep winning.</li>
+        <li><strong>Sizing safety buffer:</strong> target position values are sized against 99% of portfolio value, not 100% — <code>backtrader</code>'s <code>order_target_value</code> sizes off today's close but fills at tomorrow's open, so a 1% buffer absorbs overnight drift and avoids spurious margin rejections on a fast-moving holding sized near 100%.</li>
+      </ul>
+
+      <h3 id="nongoals">Explicit non-goals</h3>
+      <p>This is a <strong>research/backtesting tool</strong>, not a trading system:</p>
+      <ul>
+        <li>No live or paper-trading execution.</li>
+        <li>No walk-forward optimization or parameter search tooling.</li>
+        <li>No multi-strategy portfolio composition — this is a single strategy, single portfolio.</li>
+      </ul>
+    </section>
+
+    <!-- ============================================================ -->
+    <section id="architecture">
+      <h2><span class="num">2</span>Code Structure &amp; How to Run It</h2>
+      <p class="section-intro">
+        The package was refactored from a single 300+ line script
+        (<code>raw/main.py</code>, kept for reference) into a proper <code>src</code>-layout
+        Python package with the trading math separated from the <code>backtrader</code>
+        execution engine, so the math can be unit tested without spinning up a backtest.
+      </p>
+
+      <h3 id="layout-map">Package layout</h3>
+      <div class="module-map"><span class="dir">momentum/</span>
+├── pyproject.toml, README.md
+├── configs/
+│   └── default.yaml          <span class="comment"># sample run config</span>
+├── <span class="dir">src/momentum/</span>
+│   ├── config.py              <span class="comment"># RunConfig / StrategyConfig dataclasses + YAML loader</span>
+│   ├── universe.py            <span class="comment"># static list or dynamic index-constituent resolution</span>
+│   ├── data.py                <span class="comment"># yfinance fetch + local parquet cache</span>
+│   ├── scoring.py              <span class="comment"># pure math: momentum, FIP, skewness, combined score, inverse-vol</span>
+│   ├── indicators.py           <span class="comment"># backtrader Indicator wrappers around scoring.py</span>
+│   ├── strategy.py             <span class="comment"># MomentumStrategy(bt.Strategy)</span>
+│   ├── backtest.py             <span class="comment"># builds Cerebro, wires feeds + strategy, extracts returns</span>
+│   ├── reporting.py            <span class="comment"># quantstats tearsheet generation</span>
+│   └── cli.py                  <span class="comment"># `momentum run configs/default.yaml`</span>
+├── <span class="dir">tests/</span>            <span class="comment"># one test module per src module, plus a smoke test</span>
+└── <span class="dir">raw/</span>              <span class="comment"># original single-file prototype this was built from</span></div>
+
+      <h3 id="modules">Module reference</h3>
+      <table>
+        <tr><th>Module</th><th>Responsibility</th><th>Notes</th></tr>
+        <tr>
+          <td><code>scoring.py</code></td>
+          <td>Pure momentum/FIP/skewness/inverse-vol math</td>
+          <td>Zero <code>backtrader</code> imports — importable and unit-testable standalone. This is the module to point to when asked "what's actually novel here."</td>
+        </tr>
+        <tr>
+          <td><code>indicators.py</code></td>
+          <td><code>RollingSkewness</code> and <code>FrogInThePan</code>, thin <code>bt.Indicator</code> subclasses</td>
+          <td>Each just windows the price series and calls into <code>scoring.py</code> per bar — no math lives here.</td>
+        </tr>
+        <tr>
+          <td><code>strategy.py</code></td>
+          <td><code>MomentumStrategy(bt.Strategy)</code> — the regime filter, trend filter, scoring loop, and order placement</td>
+          <td>The only place that touches <code>backtrader</code>'s per-bar <code>next()</code> lifecycle and broker/position APIs.</td>
+        </tr>
+        <tr>
+          <td><code>config.py</code></td>
+          <td><code>RunConfig</code> / <code>StrategyConfig</code> dataclasses; YAML loader with validation</td>
+          <td>Validates required top-level fields and <code>rebalance_frequency</code> (only <code>None</code> or <code>"monthly"</code>) at load time — fails fast instead of at strategy runtime.</td>
+        </tr>
+        <tr>
+          <td><code>universe.py</code></td>
+          <td>Resolves a ticker list from config</td>
+          <td><code>source: static</code> (inline list) or <code>source: index:sp500</code> (live Wikipedia scrape).</td>
+        </tr>
+        <tr>
+          <td><code>data.py</code></td>
+          <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by a local parquet cache</td>
+          <td>Cache is <strong>coverage-based</strong>: a cached file is reused only if its date range already covers the request; otherwise it re-fetches and merges. Also flattens the MultiIndex columns <code>yfinance</code> sometimes returns.</td>
+        </tr>
+        <tr>
+          <td><code>backtest.py</code></td>
+          <td>Orchestration: builds <code>Cerebro</code>, adds benchmark as <code>datas[0]</code> and universe as <code>datas[1:]</code>, runs, extracts the <code>TimeReturn</code> analyzer</td>
+          <td>Missing per-ticker data is logged and skipped, not fatal; missing benchmark data <em>is</em> fatal (the regime filter can't function without it).</td>
+        </tr>
+        <tr>
+          <td><code>reporting.py</code></td>
+          <td>One-line wrapper around <code>quantstats.reports.html(...)</code></td>
+          <td>Replaced a ~230-line hand-rolled Excel reporting pipeline in the original prototype.</td>
+        </tr>
+        <tr>
+          <td><code>cli.py</code></td>
+          <td><code>argparse</code>-based entrypoint: <code>momentum run &lt;config&gt; [--output path]</code></td>
+          <td>Registered as a console script (<code>project.scripts</code> in <code>pyproject.toml</code>), so it runs as <code>momentum</code> once installed.</td>
+        </tr>
+      </table>
+
+      <h3 id="dataflow">Data flow, end to end</h3>
+      <div class="flow">
+        <div class="flow-step"><div class="flow-dot">1</div><div class="flow-body"><b>CLI</b><span><code>momentum run configs/default.yaml</code> parses args and calls <code>load_config</code>.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">2</div><div class="flow-body"><b>config.py</b><span>YAML → validated <code>RunConfig</code> (dates, benchmark, universe spec, strategy params).</span></div></div>
+        <div class="flow-step"><div class="flow-dot">3</div><div class="flow-body"><b>universe.py</b><span>Resolves the ticker list (static or live index scrape).</span></div></div>
+        <div class="flow-step"><div class="flow-dot">4</div><div class="flow-body"><b>data.py</b><span>Loads OHLCV per ticker + benchmark, hitting the local parquet cache first.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">5</div><div class="flow-body"><b>backtest.py</b><span>Builds <code>Cerebro</code>, adds all feeds, attaches <code>MomentumStrategy</code> with config params, runs it.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">6</div><div class="flow-body"><b>strategy.py / indicators.py</b><span>Per-bar: regime check → trend filter → scoring → ranking → inverse-vol sizing → orders.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">7</div><div class="flow-body"><b>backtest.py</b><span>Pulls the <code>TimeReturn</code> analyzer's daily portfolio returns and the benchmark's returns.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">8</div><div class="flow-body"><b>reporting.py</b><span><code>quantstats</code> renders a benchmark-relative HTML tearsheet.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">9</div><div class="flow-body"><b>CLI</b><span>Prints the tearsheet path.</span></div></div>
+      </div>
+
+      <h3 id="running">Running it</h3>
+      <pre><code># install dependencies
+uv sync
+
+# run a backtest against the default config
+uv run momentum run configs/default.yaml
+
+# write the tearsheet somewhere else
+uv run momentum run configs/default.yaml --output results/tearsheet.html
+
+# run the test suite
+uv run pytest</code></pre>
+      <p>
+        A run downloads (and caches under <code>.cache/</code>) OHLCV data for every ticker in
+        the universe plus the benchmark, executes the strategy over the configured date range,
+        and writes an HTML performance tearsheet (default <code>tearsheet.html</code>) comparing
+        the strategy's returns to the benchmark's.
+      </p>
+
+      <h3 id="config-ref">Config reference (<code>configs/default.yaml</code>)</h3>
+      <table>
+        <tr><th>Field</th><th>Meaning</th><th>Default in <code>configs/default.yaml</code></th></tr>
+        <tr><td><code>benchmark</code></td><td>Ticker used for the regime filter and as the tearsheet's comparison series</td><td><code>SPY</code></td></tr>
+        <tr><td><code>start_date</code> / <code>end_date</code></td><td>Backtest date range</td><td><code>2022-01-01</code> → <code>2024-12-31</code></td></tr>
+        <tr><td><code>cache_dir</code></td><td>Local parquet cache location</td><td><code>.cache</code></td></tr>
+        <tr><td><code>universe.source</code></td><td><code>static</code> or <code>index:sp500</code></td><td><code>static</code>, ~140 tickers</td></tr>
+        <tr><td><code>strategy.lookbacks</code></td><td>Momentum blend horizons (trading days)</td><td><code>[60, 120, 252]</code></td></tr>
+        <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>5</code></td></tr>
+        <tr><td><code>strategy.vol_lookback</code></td><td>Window for the inverse-vol sizing volatility</td><td><code>126</code></td></tr>
+        <tr><td><code>strategy.skewness_lookback</code></td><td>Window for the skewness signal</td><td><code>90</code></td></tr>
+        <tr><td><code>strategy.fip_lookback</code></td><td>Window for the FIP signal</td><td><code>252</code></td></tr>
+        <tr><td><code>strategy.ts_mom_lookback</code></td><td>SMA period for the per-stock trend filter</td><td><code>200</code></td></tr>
+        <tr><td><code>strategy.regime_ma_period</code></td><td>SMA period for the benchmark regime filter</td><td><code>200</code></td></tr>
+        <tr><td><code>strategy.momentum_weight</code> / <code>fip_weight</code> / <code>skewness_penalty</code></td><td>Combined-score weights</td><td><code>0.5 / 0.5 / 0.5</code></td></tr>
+        <tr><td><code>strategy.rebalance_frequency</code></td><td><code>null</code> (membership-change only) or <code>"monthly"</code></td><td><code>monthly</code></td></tr>
+      </table>
+
+      <h3 id="testing">Testing strategy</h3>
+      <ul>
+        <li><strong><code>test_scoring.py</code></strong> — pure math: combined-score weighting, FIP ratio on known positive/negative-day sequences, skewness on a known return series, inverse-vol normalization including the zero-volatility edge case. No <code>backtrader</code> involved.</li>
+        <li><strong><code>test_config.py</code></strong> — YAML loads into the expected dataclass shape; invalid/missing fields raise clear errors at load time.</li>
+        <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. This is the regression guard for cross-module wiring.</li>
+        <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
+      </ul>
+      <p>All 33 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
+    </section>
+
+    <!-- ============================================================ -->
+    <section id="interview">
+      <h2><span class="num">3</span>Interview Prep</h2>
+      <p class="section-intro">
+        The points below are the ones most likely to come up if someone probes "why is it built
+        this way" rather than just "what does it do."
+      </p>
+
+      <h3 id="decisions">Key design decisions</h3>
+      <div class="card">
+        <ul style="margin-bottom:0">
+          <li><strong>Scoring math is framework-agnostic.</strong> <code>scoring.py</code> has zero <code>backtrader</code> imports specifically so the strategy's core logic can be unit tested in milliseconds, without a full backtest run.</li>
+          <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top&nbsp;5 for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
+          <li><strong>Cache is coverage-based, not time-based.</strong> <code>data.py</code> re-fetches only when the cached date range doesn't cover what's requested — not on a TTL — so re-running the same backtest twice does zero network calls the second time.</li>
+          <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
+          <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
+        </ul>
+      </div>
+
+      <h3 id="gotchas">Gotchas worth knowing cold</h3>
+      <div class="callout gotcha">
+        <strong>1. <code>skewness_penalty</code> currently rewards, not penalizes, skew</strong>
+        See the scoring section above — the coefficient is added with a positive sign and a positive default weight.
+      </div>
+      <div class="callout gotcha">
+        <strong>2. Sizing uses a 99%-of-value buffer</strong>
+        Because <code>order_target_value</code> sizes against today's close but fills at the next bar's open, a position sized at exactly 100% of portfolio value can get margin-rejected on a single bar of price drift. The 1% reserve is a deliberate, documented workaround, not an arbitrary constant.
+      </div>
+      <div class="callout gotcha">
+        <strong>3. Only <code>"monthly"</code> is a valid non-null rebalance frequency today</strong>
+        <code>config.py</code> enforces this explicitly; <code>strategy.py</code>'s own <code>_is_rebalance_due</code> would otherwise raise a less-clear <code>ValueError</code> deep inside a run for any other string.
+      </div>
+
+      <h3 id="qa">Questions you might get, and how to answer them</h3>
+      <div class="qa">
+        <p class="q">Why separate <code>scoring.py</code> from <code>strategy.py</code>?</p>
+        <p class="a">Testability and reuse — the same momentum/FIP/skewness math could back a different execution engine or a research notebook without dragging in <code>backtrader</code>.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Why inverse-volatility sizing instead of equal weight?</p>
+        <p class="a">It's a simple risk-parity tilt: among the top-5 momentum names, it reduces the influence of the single most volatile holding on portfolio swings, without needing a full covariance-based optimizer.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What happens in a sideways, choppy market?</p>
+        <p class="a">The regime filter only reacts to the benchmark's 200-day trend, so a genuinely choppy-but-flat market won't trigger the cash switch — the strategy could still whipsaw in and out of individual names as membership changes, since there's no minimum holding period beyond the periodic/membership rebalance logic.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What would you change or add next?</p>
+        <p class="a">Candidates: transaction-cost/slippage modeling (not currently simulated), walk-forward parameter validation (explicitly out of scope today), and resolving the skewness-sign question above with an actual empirical study rather than leaving it as a tunable default.</p>
+      </div>
+    </section>
+
+    <footer>
+      Generated from the codebase at <code>src/momentum/</code>, <code>configs/default.yaml</code>,
+      and the design spec at <code>docs/superpowers/specs/2026-09-01-momentum-strategy-design.md</code>.
+    </footer>
+  </main>
+</div>
+</body>
+</html>
