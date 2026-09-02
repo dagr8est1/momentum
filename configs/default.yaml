@@ -1,0 +1,32 @@
+benchmark: SPY
+start_date: "2022-01-01"
+end_date: "2024-12-31"
+cache_dir: .cache
+
+universe:
+  source: static
+  tickers:
+    [
+      MSFT, AAPL, NVDA, GOOGL, AMZN, META, AVGO, TSLA, LLY, UNH, JNJ, MRK, ABBV,
+      PFE, TMO, DHR, MDT, "BRK-B", JPM, V, MA, BAC, WFC, GS, BLK, AXP, COST, WMT,
+      HD, PG, KO, PEP, MCD, NKE, SBUX, LOW, XOM, CVX, CAT, UNP, GE, BA, LMT, DE,
+      SMCI, TSM, ORCL, ADBE, CRM, AMD, INTC, QCOM, IBM, LIN, NFLX, DIS, VZ, CMCSA,
+      ABT, ACN, CSCO, TMUS, TXN, HON, GILD, BKNG, C, SPG, PLD, AMT, EQIX, NOW,
+      PLTR, UBER, PYPL, QQQ, VTI, DIA, IWM, XLK, XLV, XLF, XLY, XLC, XLE, XLI,
+      XLP, XLB, XLU, XLRE, VEA, VWO, EFA, EWJ, EWG, INDA, MCHI, EEM, ACWI, MTUM,
+      QUAL, USMV, VLUE, VIG, SOXX, HACK, ICLN, BOTZ, ARKK, TAN, IBB, FDN, PAVE,
+      URA, AGG, TLT, LQD, HYG, SHY, GLD, SLV, DBC, VNQ, USO, FEZ, FXI,
+    ]
+
+strategy:
+  lookbacks: [60, 120, 252]
+  top_n: 5
+  vol_lookback: 126
+  skewness_lookback: 90
+  fip_lookback: 252
+  ts_mom_lookback: 200
+  regime_ma_period: 200
+  momentum_weight: 0.5
+  fip_weight: 0.5
+  skewness_penalty: 0.5
+  rebalance_frequency: monthly

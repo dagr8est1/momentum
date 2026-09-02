@@ -8,7 +8,13 @@ def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFr
     cache_dir = Path(cache_dir)
     cache_path = cache_dir / f"{ticker}.parquet"
 
-    cached = pd.read_parquet(cache_path) if cache_path.exists() else None
+    cached = None
+    if cache_path.exists():
+        cached = pd.read_parquet(cache_path)
+        # Flatten MultiIndex columns if present
+        if isinstance(cached.columns, pd.MultiIndex):
+            cached.columns = cached.columns.get_level_values(0)
+
     if cached is not None and _covers_range(cached, start, end):
         return cached.loc[start:end]
 
@@ -32,4 +38,8 @@ def _merge(cached: pd.DataFrame, fresh: pd.DataFrame) -> pd.DataFrame:
 
 
 def _download(ticker: str, start: str, end: str) -> pd.DataFrame:
-    return yf.download(ticker, start=start, end=end, progress=False)
+    df = yf.download(ticker, start=start, end=end, progress=False)
+    # yfinance may return MultiIndex columns; flatten them
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
