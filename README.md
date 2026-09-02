@@ -9,6 +9,12 @@ config-driven runs, cached price data, and `quantstats` tearsheet reporting.
 uv sync
 ```
 
+Or, with [`just`](https://github.com/casey/just):
+
+```bash
+just venv
+```
+
 ## Running a backtest
 
 ```bash
