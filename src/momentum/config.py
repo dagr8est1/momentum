@@ -46,6 +46,12 @@ def load_config(path: str | Path) -> RunConfig:
     except TypeError as exc:
         raise ValueError(f"Invalid strategy config: {exc}") from exc
 
+    if strategy.rebalance_frequency not in (None, "monthly"):
+        raise ValueError(
+            f"Invalid rebalance_frequency: {strategy.rebalance_frequency!r} "
+            "(must be None or 'monthly')"
+        )
+
     return RunConfig(
         benchmark=raw["benchmark"],
         start_date=raw["start_date"],

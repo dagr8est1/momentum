@@ -34,6 +34,17 @@ strategy:
   not_a_real_field: 1
 """
 
+INVALID_REBALANCE_FREQUENCY_YAML = """
+benchmark: SPY
+start_date: "2022-01-01"
+end_date: "2024-12-31"
+universe:
+  source: static
+  tickers: [MSFT]
+strategy:
+  rebalance_frequency: weekly
+"""
+
 
 def test_load_config_parses_valid_yaml(tmp_path):
     config_path = tmp_path / "config.yaml"
@@ -75,4 +86,12 @@ def test_load_config_raises_on_unknown_strategy_field(tmp_path):
     config_path.write_text(UNKNOWN_STRATEGY_FIELD_YAML)
 
     with pytest.raises(ValueError, match="not_a_real_field"):
+        load_config(config_path)
+
+
+def test_load_config_raises_on_invalid_rebalance_frequency(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(INVALID_REBALANCE_FREQUENCY_YAML)
+
+    with pytest.raises(ValueError, match="rebalance_frequency"):
         load_config(config_path)
