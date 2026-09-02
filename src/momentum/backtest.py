@@ -1,3 +1,4 @@
+import logging
 from dataclasses import asdict
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from momentum.config import RunConfig
 from momentum.data import load_prices
 from momentum.strategy import MomentumStrategy
 from momentum.universe import resolve_universe
+
+logger = logging.getLogger(__name__)
 
 
 def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series]:
@@ -26,6 +29,11 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series]:
             continue
         df = load_prices(ticker, config.start_date, config.end_date, cache_dir)
         if df.empty:
+            logger.warning(
+                "No data available for ticker '%s'; skipping and continuing with the "
+                "rest of the universe.",
+                ticker,
+            )
             continue
         cerebro.adddata(bt.feeds.PandasData(dataname=df, name=ticker))
 
