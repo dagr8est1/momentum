@@ -18,6 +18,20 @@ def fip_score(returns: Sequence[float]) -> float:
     return float(np.sum(returns > 0) / len(returns))
 
 
+def downside_deviation(returns: Sequence[float], floor: float = 1e-4) -> float:
+    """Standard deviation computed only over negative returns.
+
+    Unlike plain standard deviation, upside moves aren't treated as risk —
+    a stock that only ever has big up days scores as low-risk here, not
+    high-risk. `floor` guards against a zero result (e.g. no down days in
+    the window) being treated as "no data" by inverse_vol_weights, which
+    would otherwise exclude a genuinely low-risk stock from sizing.
+    """
+    returns = np.asarray(returns, dtype=float)
+    downside = np.minimum(returns, 0.0)
+    return float(max(np.sqrt(np.mean(downside**2)), floor))
+
+
 def skewness_score(closes: Sequence[float]) -> float:
     """Skewness of the log returns implied by a window of closing prices."""
     closes = np.asarray(closes, dtype=float)

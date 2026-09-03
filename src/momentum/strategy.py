@@ -1,7 +1,7 @@
 import backtrader as bt
 import numpy as np
 
-from momentum.indicators import FrogInThePan, RollingSkewness
+from momentum.indicators import DownsideDeviation, FrogInThePan, RollingSkewness
 from momentum.scoring import combined_score, inverse_vol_weights, momentum_blend
 
 
@@ -31,9 +31,8 @@ class MomentumStrategy(bt.Strategy):
 
         self.indicators = {}
         for d in self.stocks:
-            daily_returns = bt.indicators.PercentChange(d.close, period=1)
             self.indicators[d._name] = {
-                "volatility": bt.indicators.StdDev(daily_returns, period=self.p.vol_lookback),
+                "volatility": DownsideDeviation(d, period=self.p.vol_lookback),
                 "skewness": RollingSkewness(d, period=self.p.skewness_lookback),
                 "fip": FrogInThePan(d, period=self.p.fip_lookback),
                 "ts_mom": bt.indicators.SimpleMovingAverage(
@@ -49,7 +48,7 @@ class MomentumStrategy(bt.Strategy):
         max_overall_lookback = max(
             self.p.regime_ma_period,
             self._max_momentum_lookback,
-            self.p.vol_lookback + 1,  # +1: StdDev is computed over daily returns, which need one extra prior bar
+            self.p.vol_lookback + 1,  # +1: DownsideDeviation needs one extra prior bar to compute returns
             self.p.skewness_lookback,
             self.p.fip_lookback,
             self.p.ts_mom_lookback,

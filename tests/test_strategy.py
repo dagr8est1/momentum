@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from momentum.scoring import downside_deviation
 from momentum.strategy import MomentumStrategy
 
 
@@ -180,7 +181,7 @@ def test_total_traded_value_accumulates_from_filled_orders():
     assert strategy.total_traded_value > 0
 
 
-def test_volatility_indicator_uses_return_based_stdev_not_price_level():
+def test_volatility_indicator_uses_downside_deviation_not_full_stdev():
     n = 300
     market = _uptrend(n, daily_return=0.001)
     prices = _uptrend(n, daily_return=0.004, seed=5)
@@ -202,11 +203,15 @@ def test_volatility_indicator_uses_return_based_stdev_not_price_level():
 
     prices_arr = np.array(prices)
     daily_returns = np.diff(prices_arr) / prices_arr[:-1]
-    expected = np.std(daily_returns[-vol_lookback:])
-    # A price-level stdev over the same window would be orders of magnitude
-    # larger (price-scale, not return-scale) — asserting closeness to the
-    # return-based figure rules out a silent regression back to price-level.
+    expected = downside_deviation(daily_returns[-vol_lookback:])
+    # A full (upside-and-downside) stdev over the same window would be
+    # noticeably larger for this steadily-uptrending series, since it also
+    # counts the (larger, more frequent) up days — asserting closeness to
+    # the downside-only figure rules out a silent regression back to full
+    # standard deviation.
     assert strategy.last_volatility == pytest.approx(expected, rel=1e-6)
+    full_stdev = np.std(daily_returns[-vol_lookback:])
+    assert strategy.last_volatility < full_stdev
 
 
 def test_membership_only_rebalance_does_not_repeat_monthly():

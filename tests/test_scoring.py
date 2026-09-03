@@ -3,6 +3,7 @@ import pytest
 
 from momentum.scoring import (
     combined_score,
+    downside_deviation,
     fip_score,
     inverse_vol_weights,
     momentum_blend,
@@ -20,6 +21,24 @@ def test_momentum_blend_averages_percentage_returns_across_lookbacks():
     result = momentum_blend(closes, lookbacks=[60, 120, 252])
     # returns: (150-100)/100=0.50, (150-120)/120=0.25, (150-100)/100=0.50
     assert result == pytest.approx((0.50 + 0.25 + 0.50) / 3)
+
+
+def test_downside_deviation_ignores_positive_returns():
+    returns = [0.05, 0.03, -0.02, 0.04, -0.04]
+    # downside-only: [0, 0, -0.02, 0, -0.04] -> sqrt(mean([0, 0, 0.0004, 0, 0.0016]))
+    expected = np.sqrt((0.0004 + 0.0016) / 5)
+    assert downside_deviation(returns) == pytest.approx(expected)
+
+
+def test_downside_deviation_all_positive_returns_hits_floor():
+    returns = [0.01, 0.02, 0.03]
+    assert downside_deviation(returns, floor=1e-4) == pytest.approx(1e-4)
+
+
+def test_downside_deviation_larger_for_choppier_downside():
+    calm = downside_deviation([0.01, -0.005, 0.01, -0.005])
+    volatile = downside_deviation([0.01, -0.05, 0.01, -0.05])
+    assert volatile > calm
 
 
 def test_fip_score_is_fraction_of_positive_return_days():

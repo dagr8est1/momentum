@@ -3,8 +3,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum.indicators import FrogInThePan, RollingSkewness
-from momentum.scoring import fip_score, skewness_score
+from momentum.indicators import DownsideDeviation, FrogInThePan, RollingSkewness
+from momentum.scoring import downside_deviation, fip_score, skewness_score
 
 
 def _make_feed(prices, name="TEST"):
@@ -62,4 +62,16 @@ def test_frog_in_the_pan_matches_scoring_function():
     window = prices[-(period + 1):]
     returns = np.diff(window) / np.asarray(window[:-1])
     expected_last = fip_score(returns)
+    assert captured[-1] == pytest.approx(expected_last)
+
+
+def test_downside_deviation_indicator_matches_scoring_function():
+    rng = np.random.default_rng(3)
+    prices = list(100 * np.exp(np.cumsum(rng.normal(0, 0.01, size=150))))
+    period = 126
+    captured = _run(prices, DownsideDeviation, period, "downside_dev")
+
+    window = prices[-(period + 1):]
+    returns = np.diff(window) / np.asarray(window[:-1])
+    expected_last = downside_deviation(returns)
     assert captured[-1] == pytest.approx(expected_last)
