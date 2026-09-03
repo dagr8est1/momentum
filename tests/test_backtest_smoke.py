@@ -88,6 +88,80 @@ def test_run_backtest_raises_when_benchmark_data_missing(tmp_path, monkeypatch):
         run_backtest(config)
 
 
+def test_run_backtest_raises_when_benchmark_has_insufficient_history(tmp_path, monkeypatch):
+    cache_dir = tmp_path / "cache"
+    start = "2021-01-04"
+
+    # regime_ma_period=60 needs 60 bars; the benchmark only has 10 (e.g. a
+    # short date range, or a recently-listed benchmark).
+    def _short_download(ticker, start, end):
+        return _synthetic_ohlcv(start, 10, 0.001, seed=0)
+
+    monkeypatch.setattr("momentum.data._download", _short_download)
+
+    config = RunConfig(
+        benchmark="BENCH",
+        start_date=start,
+        end_date="2021-06-01",
+        universe={"source": "static", "tickers": []},
+        strategy=StrategyConfig(
+            lookbacks=[20, 40, 60],
+            top_n=1,
+            vol_lookback=30,
+            skewness_lookback=30,
+            fip_lookback=60,
+            ts_mom_lookback=60,
+            regime_ma_period=60,
+            rebalance_frequency="monthly",
+        ),
+        cache_dir=str(cache_dir),
+    )
+
+    with pytest.raises(ValueError, match="BENCH"):
+        run_backtest(config)
+
+
+def test_run_backtest_logs_warning_for_ticker_with_insufficient_history(tmp_path, monkeypatch, caplog):
+    cache_dir = tmp_path / "cache"
+    n = 400
+    start = "2021-01-04"
+
+    def _per_ticker_download(ticker, start, end):
+        # fip_lookback=60 needs 61 bars; NEWLISTING only has 30 (e.g. a
+        # recent IPO/spinoff within the requested window).
+        bars = 30 if ticker == "NEWLISTING" else n
+        seed = {"BENCH": 0, "UP": 1, "NEWLISTING": 3}[ticker]
+        daily_return = {"BENCH": 0.001, "UP": 0.004, "NEWLISTING": 0.004}[ticker]
+        return _synthetic_ohlcv(start, bars, daily_return, seed=seed)
+
+    monkeypatch.setattr("momentum.data._download", _per_ticker_download)
+
+    dates = pd.date_range(start, periods=n, freq="B")
+    config = RunConfig(
+        benchmark="BENCH",
+        start_date=str(dates[0].date()),
+        end_date=str(dates[-1].date()),
+        universe={"source": "static", "tickers": ["UP", "NEWLISTING"]},
+        strategy=StrategyConfig(
+            lookbacks=[20, 40, 60],
+            top_n=1,
+            vol_lookback=30,
+            skewness_lookback=30,
+            fip_lookback=60,
+            ts_mom_lookback=60,
+            regime_ma_period=60,
+            rebalance_frequency="monthly",
+        ),
+        cache_dir=str(cache_dir),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="momentum.backtest"):
+        portfolio_returns, benchmark_returns = run_backtest(config)
+
+    assert "NEWLISTING" in caplog.text
+    assert not portfolio_returns.empty
+
+
 def test_run_backtest_logs_warning_for_ticker_with_no_data(tmp_path, monkeypatch, caplog):
     cache_dir = tmp_path / "cache"
     n = 400

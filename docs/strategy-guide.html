@@ -222,25 +222,139 @@
     nav.toc { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
     main { padding: 28px 20px 80px; }
   }
+
+  /* ---- slide deck ---- */
+  .slide-deck { display: flex; flex-direction: column; gap: 26px; margin: 26px 0 8px; }
+  .slide {
+    position: relative;
+    border: 1px solid var(--border);
+    background: var(--bg-alt);
+    border-radius: 18px;
+    padding: 30px 34px 28px;
+    box-shadow: var(--card-shadow);
+    scroll-margin-top: 20px;
+  }
+  .slide-number {
+    position: absolute;
+    top: 22px; right: 30px;
+    font-size: 40px;
+    font-weight: 800;
+    color: var(--border);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .slide-kicker {
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .slide h3 { margin: 0 0 6px; font-size: 21px; padding-right: 70px; }
+  .slide-sub { color: var(--text-dim); margin: 0 0 18px; max-width: 68ch; font-size: 14.5px; }
+  .slide > *:last-child { margin-bottom: 0; }
+
+  /* ---- hand-built math notation (no external lib) ---- */
+  .formula {
+    font-family: "Cambria Math", Cambria, "STIX Two Math", Georgia, "Times New Roman", serif;
+    font-size: 17px;
+    text-align: center;
+    padding: 20px 18px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 14px 0;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .formula i { font-style: italic; }
+  .formula .op { margin: 0 9px; }
+  .formula .cond { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.72em; margin-left: 2px; color: var(--text-dim); }
+  .formula .frac {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: middle;
+    margin: 0 8px;
+    text-align: center;
+    line-height: 1.3;
+    position: relative;
+    top: 0.15em;
+  }
+  .formula .frac > span { display: block; padding: 0 6px; }
+  .formula .frac .num { border-bottom: 1.4px solid currentColor; padding-bottom: 3px; }
+  .formula .frac .den { padding-top: 3px; }
+  .var-key {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    margin: 10px 0 0;
+    padding-left: 18px;
+  }
+  .var-key li { margin-bottom: 3px; }
+  .var-key i { font-style: italic; font-family: Cambria, "STIX Two Math", Georgia, serif; color: var(--text); }
+  .code-ref {
+    font-size: 12.5px;
+    color: var(--text-dim);
+    margin-top: 10px;
+  }
+  .methodology-note {
+    border: 1px solid var(--warn);
+    border-left: 3px solid var(--warn);
+    background: transparent;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 16px 0 0;
+    font-size: 13.5px;
+  }
+  .methodology-note strong { display: block; margin-bottom: 4px; color: var(--warn); }
+  .worked-table td.num, .worked-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .worked-table tr.winner td { font-weight: 700; }
+  .pipeline-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0 26px;
+    font-size: 12.5px;
+  }
+  .pipeline-strip a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    text-decoration: none;
+    background: var(--bg);
+  }
+  .pipeline-strip a:hover { border-color: var(--accent); color: var(--accent); }
+  .pipeline-strip .arrow { color: var(--border); align-self: center; }
 </style>
 </head>
 <body>
 <div class="layout">
   <nav class="toc">
     <h2>Contents</h2>
-    <a href="#overview">1 · Strategy Overview</a>
-    <a class="sub" href="#philosophy">Philosophy</a>
-    <a class="sub" href="#universe">Universe</a>
-    <a class="sub" href="#regime">Regime filter</a>
-    <a class="sub" href="#trend">Stock trend filter</a>
-    <a class="sub" href="#scoring">Scoring model</a>
-    <a class="sub" href="#sizing">Sizing &amp; rebalancing</a>
+    <a href="#overview">1 · How It Works</a>
+    <a class="sub" href="#slide-idea">The core idea</a>
+    <a class="sub" href="#slide-universe">The universe</a>
+    <a class="sub" href="#slide-regime">Regime filter</a>
+    <a class="sub" href="#slide-trend">Stock trend filter</a>
+    <a class="sub" href="#slide-momentum">Momentum score</a>
+    <a class="sub" href="#slide-fip">Frog-in-the-Pan score</a>
+    <a class="sub" href="#slide-skew">Skewness score</a>
+    <a class="sub" href="#slide-combine">Combining the score</a>
+    <a class="sub" href="#slide-select">Selecting the portfolio</a>
+    <a class="sub" href="#slide-sizing">Position sizing</a>
+    <a class="sub" href="#slide-rebalance">Rebalance mechanics</a>
+    <a class="sub" href="#slide-example">Worked example</a>
     <a class="sub" href="#nongoals">Non-goals</a>
     <a href="#architecture">2 · Code &amp; How to Run</a>
     <a class="sub" href="#layout-map">Package layout</a>
     <a class="sub" href="#modules">Module reference</a>
     <a class="sub" href="#dataflow">Data flow</a>
     <a class="sub" href="#running">Running it</a>
+    <a class="sub" href="#running-sp500">Running with S&amp;P 500</a>
     <a class="sub" href="#config-ref">Config reference</a>
     <a class="sub" href="#testing">Testing</a>
     <a href="#interview">3 · Interview Prep</a>
@@ -263,121 +377,367 @@
 
     <!-- ============================================================ -->
     <section id="overview">
-      <h2><span class="num">1</span>Strategy Overview &amp; Rationale</h2>
+      <h2><span class="num">1</span>How Momentum Investing Works Here</h2>
       <p class="section-intro">
-        The strategy rotates a fixed universe of large, liquid names into a small, equal-conviction
-        book of trending winners — while stepping fully to cash whenever the broad market itself
-        is in a downtrend. It combines three well-known ideas from the momentum literature rather
-        than inventing a new signal.
+        Twelve slides, in the order the code actually executes them: from "what is this
+        strategy, conceptually" down to the exact formulas and the mechanics of when and how
+        the portfolio changes. Every formula below is a direct transcription of a function in
+        <code>scoring.py</code>, <code>indicators.py</code>, or <code>strategy.py</code> — not
+        a textbook approximation — including two places where the code's actual math differs
+        from what its variable names imply.
       </p>
 
-      <h3 id="philosophy">Philosophy</h3>
-      <div class="grid-3">
-        <div class="card">
-          <span class="badge">Cross-sectional</span>
-          <p style="margin:0">Rank stocks against each other every period; only hold the strongest relative performers (top&nbsp;5).</p>
-        </div>
-        <div class="card">
-          <span class="badge">Time-series</span>
-          <p style="margin:0">Each holding must also be trending up in absolute terms (price above its own 200-day average) — this is "dual momentum" (Antonacci): relative <em>and</em> absolute trend must agree.</p>
-        </div>
-        <div class="card">
-          <span class="badge">Regime-aware</span>
-          <p style="margin:0">A market-level trend filter (benchmark vs. its 200-day average) can flatten the entire book to cash — the strategy doesn't try to pick winners in a falling market.</p>
-        </div>
+      <div class="pipeline-strip">
+        <a href="#slide-idea">Core idea</a><span class="arrow">→</span>
+        <a href="#slide-universe">Universe</a><span class="arrow">→</span>
+        <a href="#slide-regime">Regime filter</a><span class="arrow">→</span>
+        <a href="#slide-trend">Trend filter</a><span class="arrow">→</span>
+        <a href="#slide-momentum">Momentum</a><span class="arrow">→</span>
+        <a href="#slide-fip">FIP</a><span class="arrow">→</span>
+        <a href="#slide-skew">Skew</a><span class="arrow">→</span>
+        <a href="#slide-combine">Combine</a><span class="arrow">→</span>
+        <a href="#slide-select">Select top-N</a><span class="arrow">→</span>
+        <a href="#slide-sizing">Size</a><span class="arrow">→</span>
+        <a href="#slide-rebalance">Rebalance</a>
       </div>
 
-      <h3 id="universe">Universe</h3>
-      <p>
-        <code>configs/default.yaml</code> defines a static list of ~140 tickers: mega-cap
-        single names across sectors (tech, healthcare, financials, industrials, staples,
-        energy), sector SPDRs (<code>XLK</code>, <code>XLF</code>, …), factor/style ETFs
-        (<code>MTUM</code>, <code>QUAL</code>, <code>VLUE</code>, <code>USMV</code>), thematic
-        ETFs (<code>ARKK</code>, <code>ICLN</code>, <code>SOXX</code>), international/EM
-        (<code>EFA</code>, <code>EEM</code>, <code>FXI</code>), and bonds/commodities
-        (<code>TLT</code>, <code>GLD</code>, <code>USO</code>). Broad diversity of asset
-        classes means momentum can rotate into whatever regime is actually working —
-        equities, gold, bonds — not just equities.
-      </p>
-      <p>
-        The universe is pluggable: <code>source: static</code> uses the inline ticker list;
-        <code>source: index:sp500</code> instead scrapes current S&amp;P&nbsp;500 constituents
-        from Wikipedia at run time (<code>universe.py</code>).
-      </p>
+      <div class="slide-deck">
 
-      <h3 id="regime">Regime filter (portfolio-level)</h3>
-      <p>
-        Every bar, the benchmark's close (default <code>SPY</code>) is compared to its own
-        200-day simple moving average. If the benchmark is <em>below</em> that average, every
-        open position is closed and the strategy holds cash until the benchmark recovers above
-        it. This is the "time-series momentum" half of dual momentum applied at the market
-        level — it's the mechanism that keeps the strategy out of prolonged bear markets rather
-        than fighting them stock-by-stock.
-      </p>
+        <article class="slide" id="slide-idea">
+          <div class="slide-number">01</div>
+          <div class="slide-kicker">Foundations</div>
+          <h3>The core idea</h3>
+          <p class="slide-sub">Rotate into a small book of trending winners, and go to cash when the market itself is trending down. Three ideas from the momentum literature, combined — nothing invented from scratch.</p>
+          <div class="grid-3">
+            <div class="card">
+              <span class="badge">Cross-sectional</span>
+              <p style="margin:0">Rank stocks <em>against each other</em> every period. Only the strongest relative performers (top&nbsp;5) are held — the classic Jegadeesh &amp; Titman (1993) momentum effect.</p>
+            </div>
+            <div class="card">
+              <span class="badge">Time-series</span>
+              <p style="margin:0">Each holding must also be trending up in <em>absolute</em> terms (price above its own 200-day average). Relative <em>and</em> absolute trend must agree — Antonacci's "dual momentum."</p>
+            </div>
+            <div class="card">
+              <span class="badge">Regime-aware</span>
+              <p style="margin:0">A market-level trend filter can flatten the <em>entire</em> book to cash. The strategy doesn't try to stock-pick its way through a bear market.</p>
+            </div>
+          </div>
+          <p class="code-ref">Implements: the overall shape of <code>MomentumStrategy.next()</code> in <code>strategy.py</code>.</p>
+        </article>
 
-      <h3 id="trend">Stock-level trend filter</h3>
-      <p>
-        Within a bullish regime, a stock is only eligible if its own close is above its
-        200-day SMA (<code>ts_mom_lookback</code>). This is a cheap absolute-momentum gate
-        applied before any relative scoring — a stock ranking well on momentum but trading
-        below its own long-term trend is excluded outright.
-      </p>
+        <article class="slide" id="slide-universe">
+          <div class="slide-number">02</div>
+          <div class="slide-kicker">Foundations</div>
+          <h3>The universe</h3>
+          <p class="slide-sub">What's eligible to be ranked in the first place.</p>
+          <p>
+            <code>configs/default.yaml</code> ships a static list of ~140 tickers spanning
+            mega-cap single names (tech, healthcare, financials, industrials, staples, energy),
+            sector SPDRs (<code>XLK</code>, <code>XLF</code>, …), factor/style ETFs
+            (<code>MTUM</code>, <code>QUAL</code>, <code>VLUE</code>, <code>USMV</code>),
+            thematic ETFs (<code>ARKK</code>, <code>ICLN</code>, <code>SOXX</code>),
+            international/EM (<code>EFA</code>, <code>EEM</code>, <code>FXI</code>), and
+            bonds/commodities (<code>TLT</code>, <code>GLD</code>, <code>USO</code>). The point
+            of the breadth: momentum can rotate into <em>whatever regime is actually
+            working</em> — equities, gold, bonds — not just stocks.
+          </p>
+          <p style="margin:0">
+            The universe is pluggable: <code>source: static</code> uses that inline list;
+            <code>source: index:sp500</code> instead scrapes the live S&amp;P&nbsp;500
+            constituent table from Wikipedia at run time (<code>universe.py</code>) — see
+            <a href="#running-sp500">§2 Running with S&amp;P 500</a>.
+          </p>
+        </article>
 
-      <h3 id="scoring">Scoring model (cross-sectional rank)</h3>
-      <p>Eligible stocks (passed the trend filter, positive momentum) get a blended score combining three signals, each computed by a pure function in <code>scoring.py</code>:</p>
+        <article class="slide" id="slide-regime">
+          <div class="slide-number">03</div>
+          <div class="slide-kicker">Step 1 · Every bar, before anything else</div>
+          <h3>Regime filter — is the market itself trending up?</h3>
+          <p class="slide-sub">A single portfolio-level switch, checked before any stock is ever looked at.</p>
+          <div class="formula">
+            <i>Close</i><sub>bench</sub>(t) &lt; <i>SMA</i><sub>200</sub>[<i>Close</i><sub>bench</sub>](t)
+            <span class="op">⟹</span>
+            close every position, hold cash
+          </div>
+          <ul class="var-key">
+            <li><i>Close</i><sub>bench</sub>(t) — the benchmark's (default <code>SPY</code>) closing price on day <i>t</i></li>
+            <li><i>SMA</i><sub>200</sub>[·] — 200-day simple moving average (<code>regime_ma_period</code>)</li>
+          </ul>
+          <p>
+            When the benchmark is below its own 200-day average, <strong>every open position is
+            closed</strong> and the strategy sits in 100% cash until the benchmark recovers back
+            above it — no exceptions, regardless of how well any individual stock is scoring.
+            This is time-series momentum applied at the <em>market</em> level: the mechanism that
+            keeps the strategy out of prolonged drawdowns instead of fighting them stock-by-stock.
+          </p>
+          <div class="methodology-note">
+            <strong>What resets on a flip to cash</strong>
+            <code>last_rebalanced_stocks</code> is cleared to an empty list. So the moment the
+            regime turns bullish again, the new top-5 selection is, by definition, a full
+            "membership change" from empty — forcing an immediate rebalance into the new book
+            rather than waiting for the monthly trigger.
+          </div>
+          <p class="code-ref">Implements: <code>MomentumStrategy.next()</code>, the <code>self.market.close[0] &lt; self.regime_ma[0]</code> branch in <code>strategy.py</code>.</p>
+        </article>
 
-      <table>
-        <tr><th>Signal</th><th>Function</th><th>What it measures</th></tr>
-        <tr>
-          <td><strong>Momentum blend</strong></td>
-          <td><code>momentum_blend(closes, [60,120,252])</code></td>
-          <td>Mean price change over three horizons (~3&nbsp;mo / ~6&nbsp;mo / ~1&nbsp;yr) vs. today — smooths out any single lookback's noise.</td>
-        </tr>
-        <tr>
-          <td><strong>Frog-in-the-Pan (FIP)</strong></td>
-          <td><code>fip_score(returns)</code></td>
-          <td>Fraction of the last 252 days that closed up. Rewards steady, "boring" grinding uptrends over the same total return achieved via a few violent jumps — the academic finding is that gradual-information moves continue more reliably than jump-driven ones.</td>
-        </tr>
-        <tr>
-          <td><strong>Skewness</strong></td>
-          <td><code>skewness_score(closes)</code></td>
-          <td>Skew of the daily log-return distribution over the last 90 days.</td>
-        </tr>
-      </table>
+        <article class="slide" id="slide-trend">
+          <div class="slide-number">04</div>
+          <div class="slide-kicker">Step 2 · Per stock, only when the regime is bullish</div>
+          <h3>Stock-level trend filter</h3>
+          <p class="slide-sub">A cheap absolute-trend gate applied before any relative scoring happens.</p>
+          <div class="formula">
+            <i>Close</i><sub>i</sub>(t) &gt; <i>SMA</i><sub>200</sub>[<i>Close</i><sub>i</sub>](t)
+            <span class="op">?</span>
+            eligible <span class="op">:</span> excluded
+          </div>
+          <p style="margin:0">
+            A stock trading below its own 200-day average (<code>ts_mom_lookback</code>) is
+            excluded outright, no matter how it would otherwise score — a stock can be the
+            top cross-sectional scorer and still never make the book if it isn't itself in an
+            uptrend. Combined with the momentum-must-be-positive check on the next slide, a
+            stock actually has to clear <em>two</em> independent absolute-trend gates before its
+            relative score is even considered.
+          </p>
+          <p class="code-ref">Implements: the <code>d.close[0] &lt;= self.indicators[...]["ts_mom"][0]: continue</code> guard in <code>strategy.py</code>.</p>
+        </article>
 
-      <div class="card">
-        <h4 style="margin-top:0">Combined score</h4>
-        <pre><code>score = momentum_weight   * momentum_blend
-      + fip_weight        * fip_score
-      + skewness_penalty  * skewness_score</code></pre>
-        <p style="margin:0">Default weights: <code>momentum_weight=0.5</code>, <code>fip_weight=0.5</code>, <code>skewness_penalty=0.5</code>. Stocks are ranked by this score and the top&nbsp;5 are selected.</p>
+        <article class="slide" id="slide-momentum">
+          <div class="slide-number">05</div>
+          <div class="slide-kicker">Step 3a · Scoring — signal 1 of 3</div>
+          <h3>Momentum score</h3>
+          <p class="slide-sub">Mean price change across three horizons — smooths out any single lookback's noise.</p>
+          <div class="formula">
+            <i>M</i><sub>i</sub>(t) <span class="op">=</span>
+            <span class="frac"><span class="num">1</span><span class="den">3</span></span>
+            <span class="op">Σ</span><sub>L∈{60,120,252}</sub>
+            [ <i>Close</i><sub>i</sub>(t) − <i>Close</i><sub>i</sub>(t−L) ]
+          </div>
+          <ul class="var-key">
+            <li><i>M</i><sub>i</sub>(t) — momentum score for stock <i>i</i> on day <i>t</i></li>
+            <li>L — one of the configured lookbacks, in trading days (~3&nbsp;mo / ~6&nbsp;mo / ~1&nbsp;yr)</li>
+          </ul>
+          <p>
+            Averaging three horizons (<code>lookbacks: [60, 120, 252]</code>) is the intermediate-term
+            momentum window from Jegadeesh &amp; Titman (1993), blended across horizons so no single
+            window's noise dominates the ranking.
+          </p>
+          <div class="methodology-note">
+            <strong>Methodology gotcha — this is absolute price momentum, not percentage return</strong>
+            <code>momentum_blend()</code> computes <i>Close</i>(t) − <i>Close</i>(t−L) directly on
+            raw prices — it never divides by the starting price. A $500 stock that moved $40
+            scores <strong>higher</strong> than a $15 stock that moved $3, even if the $15 stock's
+            percentage gain was actually larger. Cross-sectional ranking is implicitly biased
+            toward high-priced names. See the worked example on <a href="#slide-example">slide 12</a>
+            for exactly how much this can skew a ranking.
+          </div>
+          <p class="code-ref">Implements: <code>scoring.momentum_blend()</code>, called from <code>MomentumStrategy._momentum_score()</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-fip">
+          <div class="slide-number">06</div>
+          <div class="slide-kicker">Step 3b · Scoring — signal 2 of 3</div>
+          <h3>Frog-in-the-Pan (FIP) score</h3>
+          <p class="slide-sub">Rewards steady, "boring" grinding uptrends over the same total return achieved via a few violent jumps.</p>
+          <div class="formula">
+            <i>FIP</i><sub>i</sub>(t) <span class="op">=</span>
+            <span class="frac"><span class="num">1</span><span class="den">252</span></span>
+            <span class="op">Σ</span><sub>d=1</sub>
+            <b>1</b>[ <i>r</i><sub>i</sub>(t−d) &gt; 0 ]
+          </div>
+          <ul class="var-key">
+            <li><i>r</i><sub>i</sub>(t−d) — stock <i>i</i>'s daily return, d days back</li>
+            <li><b>1</b>[·] — indicator function: 1 if the condition holds, else 0</li>
+            <li>window: trailing 252 trading days (<code>fip_lookback</code>)</li>
+          </ul>
+          <p style="margin:0">
+            Simply the fraction of the last year's trading days that closed up. The academic
+            basis (Da, Gurun &amp; Warachka, 2014) is investor underreaction: information that
+            arrives gradually, in a steady drip of small positive days, gets under-priced and
+            keeps continuing — while the same total return delivered via a few large jump days
+            tends to reflect one-off news that doesn't continue as reliably.
+          </p>
+          <p class="code-ref">Implements: <code>scoring.fip_score()</code>, wrapped by the <code>FrogInThePan</code> indicator in <code>indicators.py</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-skew">
+          <div class="slide-number">07</div>
+          <div class="slide-kicker">Step 3c · Scoring — signal 3 of 3</div>
+          <h3>Skewness score</h3>
+          <p class="slide-sub">The third standardized moment of the daily log-return distribution — how lopsided the recent moves have been.</p>
+          <div class="formula">
+            <i>Skew</i><sub>i</sub>(t) <span class="op">=</span>
+            <span class="frac">
+              <span class="num">(1/N) Σ (rᵢ − μᵢ)³</span>
+              <span class="den">σᵢ³</span>
+            </span>
+          </div>
+          <ul class="var-key">
+            <li><i>r</i><sub>i</sub> — daily log returns over the trailing window; <i>μ</i><sub>i</sub>, <i>σ</i><sub>i</sub> — their mean and standard deviation</li>
+            <li>window: trailing 90 trading days (<code>skewness_lookback</code>)</li>
+            <li>positive skew = occasional large up-days on a base of small down-days ("lottery-like"); negative skew = the reverse</li>
+          </ul>
+          <div class="methodology-note">
+            <strong>Naming vs. behavior — worth knowing cold</strong>
+            The weight for this term is called <code>skewness_penalty</code>, but it's added to
+            the combined score (next slide) with a <em>positive</em> sign and a positive default
+            value (0.5) — so under current defaults, <strong>more</strong> positively-skewed,
+            jumpier return distributions score <strong>higher</strong>, not lower. If the intent
+            was to genuinely penalize jump-driven moves (as the name implies, and as
+            momentum-crash literature would argue), this coefficient needs to be negative. As
+            shipped, it's a configurable tilt, not a penalty.
+          </div>
+          <p class="code-ref">Implements: <code>scoring.skewness_score()</code> (via <code>scipy.stats.skew</code>), wrapped by the <code>RollingSkewness</code> indicator in <code>indicators.py</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-combine">
+          <div class="slide-number">08</div>
+          <div class="slide-kicker">Step 3d · Combining the three signals</div>
+          <h3>Combined score</h3>
+          <p class="slide-sub">A simple weighted sum — no normalization between the three terms.</p>
+          <div class="formula">
+            <i>Score</i><sub>i</sub> <span class="op">=</span>
+            <i>w</i><sub>m</sub>·<i>M</i><sub>i</sub>
+            <span class="op">+</span>
+            <i>w</i><sub>f</sub>·<i>FIP</i><sub>i</sub>
+            <span class="op">+</span>
+            <i>w</i><sub>s</sub>·<i>Skew</i><sub>i</sub>
+          </div>
+          <ul class="var-key">
+            <li><i>w</i><sub>m</sub>, <i>w</i><sub>f</sub>, <i>w</i><sub>s</sub> — <code>momentum_weight</code>, <code>fip_weight</code>, <code>skewness_penalty</code>; default 0.5 each</li>
+          </ul>
+          <div class="methodology-note">
+            <strong>Methodology gotcha — the three terms live on completely different scales</strong>
+            <i>M</i><sub>i</sub> is a raw dollar price difference (can be anywhere from a few
+            cents to tens of dollars); <i>FIP</i><sub>i</sub> is a fraction bounded in [0, 1];
+            <i>Skew</i><sub>i</sub> is a dimensionless moment typically in roughly [−3, 3]. Summing
+            them with equal 0.5 weights means <em>M</em><sub>i</sub> numerically dominates the
+            score for any reasonably-priced stock — <em>FIP</em> and <em>Skew</em> barely move the
+            ranking in practice. The slide-12 worked example shows this concretely.
+          </div>
+          <p style="margin:0">Stocks are ranked by this score, highest to lowest — the ranking that feeds directly into top-N selection on the next slide.</p>
+        </article>
+
+        <article class="slide" id="slide-select">
+          <div class="slide-number">09</div>
+          <div class="slide-kicker">Step 4 · Choosing the book</div>
+          <h3>Selecting the portfolio</h3>
+          <p class="slide-sub">Three gates before a score even counts, then a simple top-N cut.</p>
+          <div class="formula">
+            <i>Eligible</i><sub>i</sub>(t) <span class="op">=</span>
+            [<i>Close</i><sub>i</sub> &gt; <i>SMA</i><sub>200,i</sub>]
+            <span class="op">∧</span>
+            [<i>M</i><sub>i</sub> &gt; 0]
+            <span class="op">∧</span>
+            [history<sub>i</sub> ≥ min required]
+          </div>
+          <p>
+            Only names passing <em>all three</em> — the trend filter (slide&nbsp;4), a positive
+            momentum score, and enough price history to compute every indicator — get a
+            <i>Score</i><sub>i</sub> computed at all. Eligible names are sorted by
+            <i>Score</i><sub>i</sub> descending, and the top <code>top_n</code> (default 5)
+            become the target portfolio for this bar.
+          </p>
+          <p style="margin:0" class="code-ref">Implements: the scoring loop and <code>scores.sort(...)[: self.p.top_n]</code> in <code>MomentumStrategy.next()</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-sizing">
+          <div class="slide-number">10</div>
+          <div class="slide-kicker">Step 5 · Sizing the book</div>
+          <h3>Position sizing — inverse volatility</h3>
+          <p class="slide-sub">Lower-volatility names in the top-N get proportionally larger allocations — a simple risk-parity tilt.</p>
+          <div class="formula">
+            <i>w</i><sub>i</sub> <span class="op">=</span>
+            <span class="frac">
+              <span class="num">1 / σᵢ</span>
+              <span class="den">Σ<sub>j∈TopN</sub> 1/σⱼ</span>
+            </span>
+          </div>
+          <ul class="var-key">
+            <li><i>w</i><sub>i</sub> — portfolio weight allocated to stock <i>i</i></li>
+            <li><i>σ</i><sub>i</sub> — stock <i>i</i>'s volatility measure, trailing 126 days (<code>vol_lookback</code>); zero/negative <i>σ</i> is excluded from the sum rather than dividing by zero</li>
+          </ul>
+          <div class="methodology-note">
+            <strong>Methodology gotcha — "volatility" here is the standard deviation of the price level, not of returns</strong>
+            <i>σ</i><sub>i</sub> comes from <code>bt.indicators.StdDev(d.close, period=vol_lookback)</code> —
+            the standard deviation of the raw <em>closing price</em> over the window, not of daily
+            percentage returns (the usual definition of volatility in finance). A stock in a strong,
+            steady uptrend racks up a large price-level standard deviation purely from the trend
+            itself, even with low day-to-day riskiness — while a flat, choppy low-priced stock can
+            look artificially "low volatility" simply because its price level is small. This sizing
+            formula systematically favors low-priced names; see slide&nbsp;12.
+          </div>
+          <p style="margin:0">
+            Every rebalance also reserves 1% of portfolio value as a buffer — <code>order_target_value</code>
+            sizes against today's close but fills at the next bar's open, and a position sized at
+            exactly 100% of value can get margin-rejected on a single bar of price drift.
+          </p>
+          <p class="code-ref">Implements: <code>scoring.inverse_vol_weights()</code>, called from <code>MomentumStrategy.next()</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-rebalance">
+          <div class="slide-number">11</div>
+          <div class="slide-kicker">When does any of this actually trade?</div>
+          <h3>Rebalance mechanics</h3>
+          <p class="slide-sub">Two independent triggers — whichever fires first.</p>
+          <div class="flow">
+            <div class="flow-step"><div class="flow-dot">A</div><div class="flow-body"><b>Membership change</b><span>Any name enters or exits the top-N versus the last rebalance → rebalance fires immediately, regardless of schedule.</span></div></div>
+            <div class="flow-step"><div class="flow-dot">B</div><div class="flow-body"><b>Calendar trigger</b><span>The configured <code>rebalance_frequency</code> (default <code>monthly</code>) elapses — fires even if the top-N membership hasn't changed at all.</span></div></div>
+          </div>
+          <p>
+            Trigger B exists specifically because inverse-vol weights (previous slide) go stale
+            between membership changes — without it, the same 5 names could sit at their
+            <em>original</em> sizing for months while their relative volatility drifts, since
+            nothing would otherwise force a resize.
+          </p>
+          <p>On a rebalance: positions no longer in the new top-N are closed first; inverse-vol
+          weights are recomputed for the new top-N; each target position is opened/resized via
+          <code>order_target_value</code>.</p>
+          <p style="margin:0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the membership-diff check in <code>next()</code>.</p>
+        </article>
+
+        <article class="slide" id="slide-example">
+          <div class="slide-number">12</div>
+          <div class="slide-kicker">Putting it together</div>
+          <h3>Worked example (illustrative — not live output)</h3>
+          <p class="slide-sub">Three synthetic candidates on the same rebalance day, run through the exact formulas above, showing exactly how the two methodology gotchas play out in practice.</p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table">
+            <tr><th>Ticker</th><th class="num">Price</th><th class="num">Mᵢ ($)</th><th class="num">FIPᵢ</th><th class="num">Skewᵢ</th><th class="num">Scoreᵢ</th><th>Rank</th></tr>
+            <tr class="winner"><td>HIPX</td><td class="num">$480</td><td class="num">+38.0</td><td class="num">0.58</td><td class="num">+0.15</td><td class="num">19.37</td><td>1st</td></tr>
+            <tr><td>MIDX</td><td class="num">$90</td><td class="num">+9.5</td><td class="num">0.62</td><td class="num">−0.05</td><td class="num">5.04</td><td>2nd</td></tr>
+            <tr><td>LOWX</td><td class="num">$15</td><td class="num">+2.1 (+14%)</td><td class="num">0.55</td><td class="num">+0.40</td><td class="num">1.53</td><td>3rd</td></tr>
+          </table>
+          </div>
+          <p>
+            <i>Score</i> = 0.5·M + 0.5·FIP + 0.5·Skew for each row. LOWX's <strong>+14% move is the
+            largest percentage gain of the three</strong>, but it ranks last — its $2.10 raw price
+            move is dwarfed by HIPX's $38.00, and FIP/Skew (both ≤ ~1 in magnitude) can't meaningfully
+            offset a 15–20&times; difference in the momentum term. This is the units-mismatch gotcha
+            from slides 5 and 8, made concrete.
+          </p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table">
+            <tr><th>Ticker</th><th class="num">σᵢ (price stdev)</th><th class="num">1/σᵢ</th><th class="num">Weight wᵢ</th></tr>
+            <tr><td>HIPX</td><td class="num">$25.00</td><td class="num">0.0400</td><td class="num">3.8%</td></tr>
+            <tr><td>MIDX</td><td class="num">$6.00</td><td class="num">0.1667</td><td class="num">16.0%</td></tr>
+            <tr class="winner"><td>LOWX</td><td class="num">$1.20</td><td class="num">0.8333</td><td class="num">80.1%</td></tr>
+          </table>
+          </div>
+          <p style="margin:0">
+            Now suppose all three actually made the top-N (sizing runs independently of the
+            momentum ranking above). LOWX — ranked <em>last</em> on score — gets <strong>80% of the
+            book's capital</strong>, simply because its low share price mechanically produces a
+            small price-level standard deviation. This is the sizing gotcha from slide&nbsp;10,
+            made concrete: the two effects can pull in opposite directions on the same stock.
+          </p>
+        </article>
+
       </div>
 
-      <div class="callout gotcha">
-        <strong>Naming vs. behavior — worth knowing cold</strong>
-        Despite being called <code>skewness_penalty</code>, it's added to the score with a
-        <em>positive</em> sign and a positive default weight — so under current defaults, more
-        positively-skewed (jumpier, "lottery-like") return distributions score <em>higher</em>,
-        not lower. If the intent were to genuinely penalize jump-driven moves (as the name
-        suggests, and as some momentum-crash literature would argue), this coefficient would
-        need to be negative. As shipped, it's a configurable tilt, not a penalty — flip the
-        sign in config to actually discourage skew.
+      <div class="card" id="nongoals">
+        <h4 style="margin-top:0">What this is (and isn't)</h4>
+        <p style="margin:0 0 8px">A <strong>research/backtesting tool</strong>, not a trading system: no live or paper-trading execution, no walk-forward optimization or parameter search tooling, no multi-strategy portfolio composition — one strategy, one portfolio.</p>
       </div>
-
-      <h3 id="sizing">Position sizing &amp; rebalancing</h3>
-      <ul>
-        <li><strong>Sizing:</strong> inverse-volatility weighting (<code>inverse_vol_weights</code>) across the top&nbsp;5 — lower-volatility names get proportionally larger allocations, a simple risk-parity tilt within the concentrated book. Zero/negative volatility is excluded from the normalization rather than dividing by zero.</li>
-        <li><strong>Rebalance trigger:</strong> fires immediately if top-5 <em>membership</em> changes, <em>or</em> on a periodic schedule (default: <code>monthly</code>) even if membership is unchanged — the periodic trigger exists specifically so inverse-vol weights get refreshed as relative volatility drifts, even when the same 5 names keep winning.</li>
-        <li><strong>Sizing safety buffer:</strong> target position values are sized against 99% of portfolio value, not 100% — <code>backtrader</code>'s <code>order_target_value</code> sizes off today's close but fills at tomorrow's open, so a 1% buffer absorbs overnight drift and avoids spurious margin rejections on a fast-moving holding sized near 100%.</li>
-      </ul>
-
-      <h3 id="nongoals">Explicit non-goals</h3>
-      <p>This is a <strong>research/backtesting tool</strong>, not a trading system:</p>
-      <ul>
-        <li>No live or paper-trading execution.</li>
-        <li>No walk-forward optimization or parameter search tooling.</li>
-        <li>No multi-strategy portfolio composition — this is a single strategy, single portfolio.</li>
-      </ul>
     </section>
 
     <!-- ============================================================ -->
@@ -444,7 +804,7 @@
         <tr>
           <td><code>backtest.py</code></td>
           <td>Orchestration: builds <code>Cerebro</code>, adds benchmark as <code>datas[0]</code> and universe as <code>datas[1:]</code>, runs, extracts the <code>TimeReturn</code> analyzer</td>
-          <td>Missing per-ticker data is logged and skipped, not fatal; missing benchmark data <em>is</em> fatal (the regime filter can't function without it).</td>
+          <td>Missing per-ticker data is logged and skipped, not fatal; missing benchmark data <em>is</em> fatal. Also validates every feed has enough trading days for the configured lookbacks (<code>_min_required_bars</code>) <em>before</em> handing it to <code>backtrader</code> — a too-short benchmark raises a clear error, a too-short ticker (e.g. a recent IPO/spinoff) is logged and skipped, same as missing data.</td>
         </tr>
         <tr>
           <td><code>reporting.py</code></td>
@@ -490,6 +850,65 @@ uv run pytest</code></pre>
         the strategy's returns to the benchmark's.
       </p>
 
+      <h3 id="running-sp500">Running against the S&amp;P 500 universe</h3>
+      <p>
+        <code>configs/default.yaml</code> ships with a static ~140-ticker universe. To backtest
+        against the <em>current</em> S&amp;P&nbsp;500 constituents instead, set
+        <code>universe.source</code> to <code>index:sp500</code> — <code>universe.py</code>
+        resolves this by scraping the live constituent table from Wikipedia at run time, so no
+        ticker list needs to be maintained by hand.
+      </p>
+      <pre><code>benchmark: SPY
+start_date: "2022-01-01"
+end_date: "2024-12-31"
+cache_dir: .cache
+
+universe:
+  source: index:sp500
+
+strategy:
+  lookbacks: [60, 120, 252]
+  top_n: 5
+  vol_lookback: 126
+  skewness_lookback: 90
+  fip_lookback: 252
+  ts_mom_lookback: 200
+  regime_ma_period: 200
+  momentum_weight: 0.5
+  fip_weight: 0.5
+  skewness_penalty: 0.5
+  rebalance_frequency: monthly</code></pre>
+      <p>Saved as <code>configs/sp500.yaml</code>, run it the same way as any other config:</p>
+      <pre><code>uv run momentum run configs/sp500.yaml --output tearsheet_sp500.html</code></pre>
+      <div class="callout">
+        <strong>Verified: ~3 minutes on a partially-warm cache, 493/500 tickers used</strong>
+        This exact config was run end-to-end against the live S&amp;P&nbsp;500 constituent
+        list. Total wall time was <strong>~3 minutes</strong> to fetch/cache three years of
+        history for ~500 tickers and run the backtest. 7 tickers were skipped automatically,
+        each logged as a warning rather than failing the run: a few no longer resolve on Yahoo
+        Finance (ticker changes since the snapshot), and a few recently-listed spinoffs/IPOs
+        (e.g. <code>GEV</code>, <code>SOLV</code>, <code>RDDT</code>) don't yet have the ~253
+        trading days of history the default lookbacks require — see the
+        <code>_min_required_bars</code> check in <code>backtest.py</code>, added specifically to
+        turn that case into a clean skip instead of a crash. Every ticker gets cached to
+        <code>.cache/&lt;TICKER&gt;.parquet</code>, so a second run against the same or a
+        narrower range is fast — the cache is coverage-based, not time-based.
+      </div>
+      <ul>
+        <li>Needs network access to both <code>en.wikipedia.org</code> (constituent scrape) and Yahoo Finance (price data).</li>
+        <li>A handful of tickers will fail to fetch or have too little history; both cases are logged and skipped rather than aborting the run.</li>
+        <li>
+          <strong>Don't shrink the date range below ~14 months</strong> to "test faster" — the
+          default <code>fip_lookback: 252</code> needs 253 trading days of history per ticker,
+          and a single calendar year only has ~251. A too-short range now raises a clear
+          <code>ValueError</code> naming the shortfall instead of crashing deep inside
+          <code>backtrader</code> with an opaque <code>IndexError</code> (a real bug this guide's
+          own S&amp;P&nbsp;500 testing turned up — fixed and covered by
+          <code>test_backtest_smoke.py</code>). To iterate faster, shrink the <em>universe</em>
+          (fewer tickers) instead of the date range.
+        </li>
+      </ul>
+
       <h3 id="config-ref">Config reference (<code>configs/default.yaml</code>)</h3>
       <table>
         <tr><th>Field</th><th>Meaning</th><th>Default in <code>configs/default.yaml</code></th></tr>
@@ -512,10 +931,10 @@ uv run pytest</code></pre>
       <ul>
         <li><strong><code>test_scoring.py</code></strong> — pure math: combined-score weighting, FIP ratio on known positive/negative-day sequences, skewness on a known return series, inverse-vol normalization including the zero-volatility edge case. No <code>backtrader</code> involved.</li>
         <li><strong><code>test_config.py</code></strong> — YAML loads into the expected dataclass shape; invalid/missing fields raise clear errors at load time.</li>
-        <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. This is the regression guard for cross-module wiring.</li>
+        <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. Also covers the two insufficient-history cases: a too-short benchmark raises <code>ValueError</code>, a too-short ticker is logged and skipped. This is the regression guard for cross-module wiring.</li>
         <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
       </ul>
-      <p>All 33 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
+      <p>All 35 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
     </section>
 
     <!-- ============================================================ -->
@@ -534,21 +953,40 @@ uv run pytest</code></pre>
           <li><strong>Cache is coverage-based, not time-based.</strong> <code>data.py</code> re-fetches only when the cached date range doesn't cover what's requested — not on a TTL — so re-running the same backtest twice does zero network calls the second time.</li>
           <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
           <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
+          <li><strong>Data-length validation added after a real bug.</strong> Testing the S&amp;P&nbsp;500 universe against a too-short date range crashed with a raw backtrader <code>IndexError</code> — the fix (<code>backtest.py::_min_required_bars</code>) validates every feed's length against the configured lookbacks upfront, converting that into either a clear error (benchmark) or a graceful skip (ticker), matching the existing missing-data philosophy rather than inventing a new one.</li>
         </ul>
       </div>
 
       <h3 id="gotchas">Gotchas worth knowing cold</h3>
       <div class="callout gotcha">
         <strong>1. <code>skewness_penalty</code> currently rewards, not penalizes, skew</strong>
-        See the scoring section above — the coefficient is added with a positive sign and a positive default weight.
+        See <a href="#slide-skew">slide&nbsp;7</a> — the coefficient is added with a positive sign and a positive default weight.
       </div>
       <div class="callout gotcha">
-        <strong>2. Sizing uses a 99%-of-value buffer</strong>
+        <strong>2. The three scored signals live on different scales</strong>
+        Raw price-difference momentum, a [0,1] fraction, and a roughly [−3,3] moment are summed
+        with equal weights (<a href="#slide-combine">slide&nbsp;8</a>) — momentum numerically
+        dominates the ranking for any reasonably-priced stock. See the worked example on
+        <a href="#slide-example">slide&nbsp;12</a>.
+      </div>
+      <div class="callout gotcha">
+        <strong>3. Inverse-vol sizing uses price-level standard deviation, not return volatility</strong>
+        <a href="#slide-sizing">Slide&nbsp;10</a> — low-priced names get systematically larger
+        weights, independent of their actual day-to-day riskiness.
+      </div>
+      <div class="callout gotcha">
+        <strong>4. Sizing uses a 99%-of-value buffer</strong>
         Because <code>order_target_value</code> sizes against today's close but fills at the next bar's open, a position sized at exactly 100% of portfolio value can get margin-rejected on a single bar of price drift. The 1% reserve is a deliberate, documented workaround, not an arbitrary constant.
       </div>
       <div class="callout gotcha">
-        <strong>3. Only <code>"monthly"</code> is a valid non-null rebalance frequency today</strong>
+        <strong>5. Only <code>"monthly"</code> is a valid non-null rebalance frequency today</strong>
         <code>config.py</code> enforces this explicitly; <code>strategy.py</code>'s own <code>_is_rebalance_due</code> would otherwise raise a less-clear <code>ValueError</code> deep inside a run for any other string.
+      </div>
+      <div class="callout gotcha">
+        <strong>6. The date range must cover at least ~253 trading days</strong>
+        Driven by <code>fip_lookback + 1</code>; a shorter range now raises a clear
+        <code>ValueError</code> (benchmark) or skips the ticker (per-name) instead of an opaque
+        crash — see the note under <a href="#running-sp500">§2 Running with S&amp;P 500</a>.
       </div>
 
       <h3 id="qa">Questions you might get, and how to answer them</h3>
@@ -565,8 +1003,12 @@ uv run pytest</code></pre>
         <p class="a">The regime filter only reacts to the benchmark's 200-day trend, so a genuinely choppy-but-flat market won't trigger the cash switch — the strategy could still whipsaw in and out of individual names as membership changes, since there's no minimum holding period beyond the periodic/membership rebalance logic.</p>
       </div>
       <div class="qa">
+        <p class="q">If you had to name the single biggest methodology risk, what would it be?</p>
+        <p class="a">The units mismatch in the combined score (<a href="#slide-combine">slide&nbsp;8</a>): momentum is a raw price difference, so for any real, price-diverse universe the ranking is much closer to "sort by dollar price change" than the three-factor blend the weights suggest. Converting momentum to a percentage return before blending would be the highest-leverage single fix.</p>
+      </div>
+      <div class="qa">
         <p class="q">What would you change or add next?</p>
-        <p class="a">Candidates: transaction-cost/slippage modeling (not currently simulated), walk-forward parameter validation (explicitly out of scope today), and resolving the skewness-sign question above with an actual empirical study rather than leaving it as a tunable default.</p>
+        <p class="a">In priority order: normalize momentum to a percentage return and volatility to return-based (not price-level) standard deviation — both change the actual ranking and sizing, not just cosmetics; add transaction-cost/slippage modeling (not currently simulated); add walk-forward parameter validation (explicitly out of scope today); and resolve the skewness-sign question with an actual empirical study rather than leaving it as a tunable default.</p>
       </div>
     </section>
 
