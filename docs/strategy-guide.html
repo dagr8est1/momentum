@@ -505,15 +505,18 @@
           <div class="slide-number">05</div>
           <div class="slide-kicker">Step 3a · Scoring — signal 1 of 3</div>
           <h3>Momentum score</h3>
-          <p class="slide-sub">Mean price change across three horizons — smooths out any single lookback's noise.</p>
+          <p class="slide-sub">Mean percentage return across three horizons — smooths out any single lookback's noise.</p>
           <div class="formula">
             <i>M</i><sub>i</sub>(t) <span class="op">=</span>
             <span class="frac"><span class="num">1</span><span class="den">3</span></span>
             <span class="op">Σ</span><sub>L∈{60,120,252}</sub>
-            [ <i>Close</i><sub>i</sub>(t) − <i>Close</i><sub>i</sub>(t−L) ]
+            <span class="frac">
+              <span class="num">Close<sub>i</sub>(t) − Close<sub>i</sub>(t−L)</span>
+              <span class="den">Close<sub>i</sub>(t−L)</span>
+            </span>
           </div>
           <ul class="var-key">
-            <li><i>M</i><sub>i</sub>(t) — momentum score for stock <i>i</i> on day <i>t</i></li>
+            <li><i>M</i><sub>i</sub>(t) — momentum score for stock <i>i</i> on day <i>t</i>, as a fraction (0.10 = +10%)</li>
             <li>L — one of the configured lookbacks, in trading days (~3&nbsp;mo / ~6&nbsp;mo / ~1&nbsp;yr)</li>
           </ul>
           <p>
@@ -522,13 +525,18 @@
             window's noise dominates the ranking.
           </p>
           <div class="methodology-note">
-            <strong>Methodology gotcha — this is absolute price momentum, not percentage return</strong>
-            <code>momentum_blend()</code> computes <i>Close</i>(t) − <i>Close</i>(t−L) directly on
-            raw prices — it never divides by the starting price. A $500 stock that moved $40
-            scores <strong>higher</strong> than a $15 stock that moved $3, even if the $15 stock's
-            percentage gain was actually larger. Cross-sectional ranking is implicitly biased
-            toward high-priced names. See the worked example on <a href="#slide-example">slide 12</a>
-            for exactly how much this can skew a ranking.
+            <strong>Fixed — this was absolute price momentum, not percentage return</strong>
+            <code>momentum_blend()</code> originally computed <i>Close</i>(t) − <i>Close</i>(t−L)
+            directly on raw prices, never dividing by the starting price — a $500 stock that
+            moved $40 scored <strong>higher</strong> than a $15 stock that moved $3, even if the
+            $15 stock's percentage gain was actually larger, biasing the ranking toward
+            high-priced names. Normalizing to a percentage return (shown above) fixed this.
+            <strong>Measured effect</strong> on the real S&amp;P&nbsp;500 backtest
+            (<a href="#running-sp500">§2</a>): Sharpe ratio −0.03 → 0.08, CAGR −0.7% → +0.3%, and
+            annualized turnover dropped 4.06x → 2.42x/year — a more stable ranking traded less.
+            Still well behind the benchmark's 8.8% CAGR, so this was a real contributor but not
+            the whole story. See the worked example on <a href="#slide-example">slide 12</a> for
+            the before/after on a concrete ranking.
           </div>
           <p class="code-ref">Implements: <code>scoring.momentum_blend()</code>, called from <code>MomentumStrategy._momentum_score()</code>.</p>
         </article>
@@ -606,13 +614,15 @@
             <li><i>w</i><sub>m</sub>, <i>w</i><sub>f</sub>, <i>w</i><sub>s</sub> — <code>momentum_weight</code>, <code>fip_weight</code>, <code>skewness_penalty</code>; default 0.5 each</li>
           </ul>
           <div class="methodology-note">
-            <strong>Methodology gotcha — the three terms live on completely different scales</strong>
-            <i>M</i><sub>i</sub> is a raw dollar price difference (can be anywhere from a few
-            cents to tens of dollars); <i>FIP</i><sub>i</sub> is a fraction bounded in [0, 1];
-            <i>Skew</i><sub>i</sub> is a dimensionless moment typically in roughly [−3, 3]. Summing
-            them with equal 0.5 weights means <em>M</em><sub>i</sub> numerically dominates the
-            score for any reasonably-priced stock — <em>FIP</em> and <em>Skew</em> barely move the
-            ranking in practice. The slide-12 worked example shows this concretely.
+            <strong>Improved, not fully solved — the three terms still aren't on identical scales</strong>
+            Now that <i>M</i><sub>i</sub> is a percentage return (<a href="#slide-momentum">slide&nbsp;5</a>),
+            it typically sits in roughly [−0.5, 0.5] for a 3-year window — much closer to
+            <i>FIP</i><sub>i</sub>'s [0, 1] and <i>Skew</i><sub>i</sub>'s roughly [−3, 3] than the
+            old raw-dollar version, which could run into the tens. It's no longer 15–20&times; out
+            of scale, but the three terms still aren't formally normalized (e.g. z-scored) against
+            each other, so <em>Skew</em><sub>i</sub>'s wider typical range can still outweigh the
+            other two more than the equal 0.5 weights might suggest. The slide-12 worked example
+            shows the before/after concretely.
           </div>
           <p style="margin:0">Stocks are ranked by this score, highest to lowest — the ranking that feeds directly into top-N selection on the next slide.</p>
         </article>
@@ -698,22 +708,24 @@
         <article class="slide" id="slide-example">
           <div class="slide-number">12</div>
           <div class="slide-kicker">Putting it together</div>
-          <h3>Worked example (illustrative — not live output)</h3>
-          <p class="slide-sub">Three synthetic candidates on the same rebalance day, run through the exact formulas above, showing exactly how the two methodology gotchas play out in practice.</p>
+          <h3>Worked example — the momentum fix, before and after</h3>
+          <p class="slide-sub">Three synthetic candidates on the same rebalance day, run through the exact formulas above. Prices/FIP/Skew are illustrative; the before/after scores use the actual (fixed) formula and the original (raw-difference) one side by side.</p>
           <div class="table-scroll" style="overflow-x:auto">
           <table class="worked-table">
-            <tr><th>Ticker</th><th class="num">Price</th><th class="num">Mᵢ ($)</th><th class="num">FIPᵢ</th><th class="num">Skewᵢ</th><th class="num">Scoreᵢ</th><th>Rank</th></tr>
-            <tr class="winner"><td>HIPX</td><td class="num">$480</td><td class="num">+38.0</td><td class="num">0.58</td><td class="num">+0.15</td><td class="num">19.37</td><td>1st</td></tr>
-            <tr><td>MIDX</td><td class="num">$90</td><td class="num">+9.5</td><td class="num">0.62</td><td class="num">−0.05</td><td class="num">5.04</td><td>2nd</td></tr>
-            <tr><td>LOWX</td><td class="num">$15</td><td class="num">+2.1 (+14%)</td><td class="num">0.55</td><td class="num">+0.40</td><td class="num">1.53</td><td>3rd</td></tr>
+            <tr><th>Ticker</th><th class="num">Price</th><th class="num">$ move</th><th class="num">% return (Mᵢ)</th><th class="num">FIPᵢ</th><th class="num">Skewᵢ</th><th class="num">Score (before fix)</th><th>Rank</th><th class="num">Score (after fix)</th><th>Rank</th></tr>
+            <tr><td>HIPX</td><td class="num">$480</td><td class="num">+$38.00</td><td class="num">+8.6%</td><td class="num">0.58</td><td class="num">+0.15</td><td class="num">19.37</td><td>1st</td><td class="num">0.408</td><td>2nd</td></tr>
+            <tr><td>MIDX</td><td class="num">$90</td><td class="num">+$9.50</td><td class="num">+11.8%</td><td class="num">0.62</td><td class="num">−0.05</td><td class="num">5.04</td><td>2nd</td><td class="num">0.344</td><td>3rd</td></tr>
+            <tr class="winner"><td>LOWX</td><td class="num">$15</td><td class="num">+$2.10</td><td class="num">+16.3%</td><td class="num">0.55</td><td class="num">+0.40</td><td class="num">1.53</td><td>3rd</td><td class="num">0.556</td><td>1st</td></tr>
           </table>
           </div>
           <p>
-            <i>Score</i> = 0.5·M + 0.5·FIP + 0.5·Skew for each row. LOWX's <strong>+14% move is the
-            largest percentage gain of the three</strong>, but it ranks last — its $2.10 raw price
-            move is dwarfed by HIPX's $38.00, and FIP/Skew (both ≤ ~1 in magnitude) can't meaningfully
-            offset a 15–20&times; difference in the momentum term. This is the units-mismatch gotcha
-            from slides 5 and 8, made concrete.
+            LOWX has the <strong>largest percentage gain of the three (+16.3%)</strong>. Under the
+            original raw-difference formula it ranked <em>last</em> — its $2.10 move was dwarfed by
+            HIPX's $38.00, and FIP/Skew couldn't offset a 15–20&times; gap in the momentum term.
+            After normalizing to percentage returns, the ranking flips: LOWX moves from 3rd to
+            <strong>1st</strong>, and HIPX drops from 1st to 2nd. This is the actual mechanism
+            behind the real-run improvement on <a href="#slide-momentum">slide&nbsp;5</a> — the
+            fix doesn't just shrink the numbers, it changes which stocks get bought.
           </p>
           <div class="table-scroll" style="overflow-x:auto">
           <table class="worked-table">
@@ -724,11 +736,13 @@
           </table>
           </div>
           <p style="margin:0">
-            Now suppose all three actually made the top-N (sizing runs independently of the
-            momentum ranking above). LOWX — ranked <em>last</em> on score — gets <strong>80% of the
-            book's capital</strong>, simply because its low share price mechanically produces a
-            small price-level standard deviation. This is the sizing gotcha from slide&nbsp;10,
-            made concrete: the two effects can pull in opposite directions on the same stock.
+            The sizing side is a separate, <strong>still-open</strong> issue (the momentum fix
+            doesn't touch it): suppose all three make the top-N regardless of rank above. LOWX
+            still gets <strong>80% of the book's capital</strong>, simply because its low share
+            price mechanically produces a small price-level standard deviation — the sizing gotcha
+            from slide&nbsp;10. Fixing momentum changed <em>who gets picked</em>; fixing sizing
+            (return-based volatility instead of price-level) would change <em>how much they get</em>,
+            and is the next highest-leverage fix per the Interview Prep Q&amp;A.
           </p>
         </article>
 
@@ -909,28 +923,33 @@ strategy:
       </p>
       <div class="table-scroll" style="overflow-x:auto">
       <table class="worked-table">
-        <tr><th>Metric</th><th class="num">Strategy</th><th class="num">Benchmark (SPY)</th></tr>
-        <tr><td>Backtest period</td><td colspan="2">2022-01-03 to 2024-12-30 (~3.0 years)</td></tr>
-        <tr><td>Total return (absolute)</td><td class="num">−2.0%</td><td class="num">+28.7%</td></tr>
-        <tr class="winner"><td>Relative total return</td><td colspan="2" class="num">−30.7% (strategy − benchmark)</td></tr>
-        <tr><td>Annualized return (CAGR)</td><td class="num">−0.7%</td><td class="num">+8.8%</td></tr>
-        <tr class="winner"><td>Relative CAGR</td><td colspan="2" class="num">−9.5% (strategy − benchmark)</td></tr>
-        <tr><td>Sharpe ratio</td><td class="num">−0.03</td><td class="num">0.57</td></tr>
-        <tr><td>Annualized turnover</td><td colspan="2" class="num">4.06x per year</td></tr>
+        <tr><th>Metric</th><th class="num">Before fix</th><th class="num">After fix</th><th class="num">Benchmark (SPY)</th></tr>
+        <tr><td>Backtest period</td><td colspan="3">2022-01-03 to 2024-12-30 (~3.0 years), identical run both times</td></tr>
+        <tr><td>Total return (absolute)</td><td class="num">−2.0%</td><td class="num">+0.9%</td><td class="num">+28.7%</td></tr>
+        <tr><td>Relative total return</td><td class="num">−30.7%</td><td class="num">−27.8%</td><td>vs. benchmark</td></tr>
+        <tr><td>Annualized return (CAGR)</td><td class="num">−0.7%</td><td class="num">+0.3%</td><td class="num">+8.8%</td></tr>
+        <tr><td>Relative CAGR</td><td class="num">−9.5%</td><td class="num">−8.5%</td><td>vs. benchmark</td></tr>
+        <tr class="winner"><td>Sharpe ratio</td><td class="num">−0.03</td><td class="num">0.08</td><td class="num">0.57</td></tr>
+        <tr class="winner"><td>Annualized turnover</td><td class="num">4.06x</td><td class="num">2.42x</td><td>per year</td></tr>
       </table>
       </div>
       <div class="methodology-note">
-        <strong>The strategy actually lost to the benchmark here — and that's worth sitting with</strong>
-        This isn't a cherry-picked or illustrative number; it's the real result of the exact
-        config above, over 2022–2024. A momentum strategy trailing a simple buy-and-hold
-        benchmark by ~9.5 points of CAGR, with a negative Sharpe ratio, is a legitimate
-        red flag — and a plausible contributor is sitting in <a href="#slide-combine">slide&nbsp;8</a>
-        and <a href="#slide-sizing">slide&nbsp;10</a>: if the combined score is effectively
-        "mostly sort by dollar price change," and sizing systematically overweights low-priced
-        names regardless of actual risk, the resulting book may look quite different from what
-        the three-factor, risk-parity-tilted design intends. This is exactly the kind of result
-        that should prompt fixing the units-mismatch and price-level-volatility issues before
-        drawing any conclusion about momentum investing itself from this backtest.
+        <strong>A real fix, measured — and still a real underperformance</strong>
+        "Before fix" is the original raw-price-difference momentum; "after fix" is the same exact
+        config re-run once <code>momentum_blend()</code> was normalized to a percentage return
+        (<a href="#slide-momentum">slide&nbsp;5</a>). The fix helped: Sharpe flipped from negative
+        to positive, CAGR improved by a full point, and turnover dropped by ~40% — a more
+        meaningful ranking naturally trades less. It's a real, measured, non-trivial improvement,
+        not a rounding difference.
+        <br><br>
+        It's also nowhere near enough to close a ~8.5-point CAGR gap to the benchmark. The
+        price-level-volatility sizing issue (<a href="#slide-sizing">slide&nbsp;10</a>) is still
+        unfixed and is the next candidate — but 2022 was also a documented difficult year for
+        momentum strategies broadly (a rate-shock regime), so some of this gap may be the market
+        environment rather than something left to fix in the code. The honest conclusion from one
+        3-year window over one universe is "this specific bug materially hurt performance," not
+        "this strategy is now validated" or "momentum doesn't work" — that needs the walk-forward
+        validation this tool explicitly doesn't do (<a href="#nongoals">§1 Non-goals</a>).
       </div>
       <ul>
         <li>Needs network access to both <code>en.wikipedia.org</code> (constituent scrape) and Yahoo Finance (price data).</li>
@@ -1002,16 +1021,17 @@ strategy:
         See <a href="#slide-skew">slide&nbsp;7</a> — the coefficient is added with a positive sign and a positive default weight.
       </div>
       <div class="callout gotcha">
-        <strong>2. The three scored signals live on different scales</strong>
-        Raw price-difference momentum, a [0,1] fraction, and a roughly [−3,3] moment are summed
-        with equal weights (<a href="#slide-combine">slide&nbsp;8</a>) — momentum numerically
-        dominates the ranking for any reasonably-priced stock. See the worked example on
-        <a href="#slide-example">slide&nbsp;12</a>.
+        <strong>2. Fixed: momentum used to be a raw price difference, not a percentage return</strong>
+        Was dollar-scale (<a href="#slide-combine">slide&nbsp;8</a> discusses the residual scale
+        gap vs. FIP/Skew); now a percentage return (<a href="#slide-momentum">slide&nbsp;5</a>).
+        Measured on the real S&amp;P&nbsp;500 backtest: Sharpe −0.03 → 0.08, CAGR −0.7% → +0.3%.
+        See the before/after worked example on <a href="#slide-example">slide&nbsp;12</a>.
       </div>
       <div class="callout gotcha">
-        <strong>3. Inverse-vol sizing uses price-level standard deviation, not return volatility</strong>
+        <strong>3. Still open: inverse-vol sizing uses price-level standard deviation, not return volatility</strong>
         <a href="#slide-sizing">Slide&nbsp;10</a> — low-priced names get systematically larger
-        weights, independent of their actual day-to-day riskiness.
+        weights, independent of their actual day-to-day riskiness. Unlike gotcha&nbsp;2, this one
+        hasn't been fixed yet — it's the next candidate per the Interview Prep Q&amp;A below.
       </div>
       <div class="callout gotcha">
         <strong>4. Sizing uses a 99%-of-value buffer</strong>
@@ -1042,12 +1062,16 @@ strategy:
         <p class="a">The regime filter only reacts to the benchmark's 200-day trend, so a genuinely choppy-but-flat market won't trigger the cash switch — the strategy could still whipsaw in and out of individual names as membership changes, since there's no minimum holding period beyond the periodic/membership rebalance logic.</p>
       </div>
       <div class="qa">
-        <p class="q">If you had to name the single biggest methodology risk, what would it be?</p>
-        <p class="a">The units mismatch in the combined score (<a href="#slide-combine">slide&nbsp;8</a>): momentum is a raw price difference, so for any real, price-diverse universe the ranking is much closer to "sort by dollar price change" than the three-factor blend the weights suggest. Converting momentum to a percentage return before blending would be the highest-leverage single fix.</p>
+        <p class="q">If you had to name the single biggest remaining methodology risk, what would it be?</p>
+        <p class="a">Inverse-vol sizing using price-level standard deviation instead of return volatility (<a href="#slide-sizing">slide&nbsp;10</a>): low-priced names get systematically larger weights regardless of actual riskiness. This is the sizing counterpart to the momentum fix already made — same category of bug, not yet fixed, and the natural next thing to measure the same way.</p>
+      </div>
+      <div class="qa">
+        <p class="q">You mentioned momentum used to be a raw price difference — what happened when you fixed it?</p>
+        <p class="a">Normalized <code>momentum_blend()</code> to a percentage return and re-ran the exact same S&amp;P&nbsp;500 config (<a href="#running-sp500">§2</a>): Sharpe ratio went from −0.03 to 0.08, CAGR from −0.7% to +0.3%, and annualized turnover dropped from 4.06x to 2.42x/year. A real, measured improvement — but still well behind the benchmark's 8.8% CAGR, so it was a genuine contributor to the underperformance, not the sole cause.</p>
       </div>
       <div class="qa">
         <p class="q">What would you change or add next?</p>
-        <p class="a">In priority order: normalize momentum to a percentage return and volatility to return-based (not price-level) standard deviation — both change the actual ranking and sizing, not just cosmetics; add transaction-cost/slippage modeling (not currently simulated); add walk-forward parameter validation (explicitly out of scope today); and resolve the skewness-sign question with an actual empirical study rather than leaving it as a tunable default.</p>
+        <p class="a">In priority order: fix inverse-vol sizing to use return-based (not price-level) volatility — the momentum-side equivalent fix already measured a real improvement, so this is the highest-confidence next step; add transaction-cost/slippage modeling (not currently simulated, and turnover is now measured at 2.42x/year, so costs aren't negligible); add walk-forward parameter validation (explicitly out of scope today); and resolve the skewness-sign question with an actual empirical study rather than leaving it as a tunable default.</p>
       </div>
     </section>
 

@@ -22,7 +22,14 @@ def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFr
     fresh = _download(ticker, start, end)
     updated_ticker = fresh if cached is None else _merge(cached, fresh)
 
-    _store_ticker(cache_dir, combined, ticker, updated_ticker)
+    if not updated_ticker.empty:
+        # A ticker that download returns nothing for (delisted, typo, not yet
+        # listed) is left out of the store entirely rather than persisted as
+        # a zero-row entry — that would rewrite the whole (git-tracked) file
+        # on every single run without ever learning anything new. The cost:
+        # such a ticker is re-attempted on every run instead of being
+        # remembered as "known empty".
+        _store_ticker(cache_dir, combined, ticker, updated_ticker)
     return updated_ticker.loc[start:end]
 
 
@@ -51,7 +58,10 @@ def _ticker_slice(combined: pd.DataFrame, ticker: str) -> pd.DataFrame | None:
 def _store_ticker(
     cache_dir: Path, combined: pd.DataFrame, ticker: str, ticker_df: pd.DataFrame
 ) -> None:
-    to_store = ticker_df.copy()
+    # Keep the canonical OHLCV columns only — yfinance sometimes includes
+    # extras (e.g. "Adj Close") that would otherwise leak into the combined
+    # store's schema for every ticker via the outer join in pd.concat below.
+    to_store = ticker_df[["Open", "High", "Low", "Close", "Volume"]].copy()
     to_store.index.name = "Date"
     to_store = to_store.reset_index()
     to_store.insert(0, "ticker", ticker)
@@ -68,6 +78,12 @@ def _store_ticker(
 
 
 def _covers_range(df: pd.DataFrame, start: str, end: str) -> bool:
+    # A ticker whose real trading history starts after `start` (e.g. a recent
+    # IPO/spinoff) can never satisfy this, so it gets re-downloaded and
+    # re-persisted on every run — a minor, expected source of row reordering
+    # / tiny float-precision churn in cache_data/prices.parquet for the
+    # handful of tickers this affects. Not worth a "permanently short" cache
+    # state for what's a small, cosmetic diff.
     if df.empty:
         return False
     return df.index.min() <= pd.Timestamp(start) and df.index.max() >= pd.Timestamp(end)

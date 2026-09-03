@@ -5,11 +5,11 @@ from scipy.stats import skew
 
 
 def momentum_blend(closes: Sequence[float], lookbacks: Sequence[int]) -> float:
-    """Mean price difference between the latest close and each lookback's close."""
+    """Mean percentage return from each lookback's close to the latest close."""
     closes = np.asarray(closes, dtype=float)
     latest = closes[-1]
-    diffs = [latest - closes[-1 - lb] for lb in lookbacks]
-    return float(np.mean(diffs))
+    returns = [(latest - closes[-1 - lb]) / closes[-1 - lb] for lb in lookbacks]
+    return float(np.mean(returns))
 
 
 def fip_score(returns: Sequence[float]) -> float:

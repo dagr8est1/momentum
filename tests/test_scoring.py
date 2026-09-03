@@ -10,11 +10,16 @@ from momentum.scoring import (
 )
 
 
-def test_momentum_blend_averages_price_diffs_across_lookbacks():
-    closes = list(range(1, 254))  # 1..253, strictly increasing by 1 each day
+def test_momentum_blend_averages_percentage_returns_across_lookbacks():
+    closes = [100.0] * 253
+    closes[0] = 100.0  # 252-day-ago reference
+    closes[132] = 120.0  # 120-day-ago reference
+    closes[192] = 100.0  # 60-day-ago reference
+    closes[252] = 150.0  # latest close
+
     result = momentum_blend(closes, lookbacks=[60, 120, 252])
-    # closes[-1] = 253; diffs are 253-193=60, 253-133=120, 253-1=252
-    assert result == pytest.approx((60 + 120 + 252) / 3)
+    # returns: (150-100)/100=0.50, (150-120)/120=0.25, (150-100)/100=0.50
+    assert result == pytest.approx((0.50 + 0.25 + 0.50) / 3)
 
 
 def test_fip_score_is_fraction_of_positive_return_days():
