@@ -27,7 +27,7 @@ def _min_required_bars(strategy: StrategyConfig) -> int:
     """
     return max(
         max(strategy.lookbacks) + 1,
-        strategy.vol_lookback,
+        strategy.vol_lookback + 1,
         strategy.skewness_lookback,
         strategy.fip_lookback + 1,
         strategy.ts_mom_lookback,

@@ -42,6 +42,21 @@ def _run(market_prices, stock_prices_by_name, strategy_cls=MomentumStrategy, **s
     return results[0]
 
 
+class _VolatilityRecordingStrategy(MomentumStrategy):
+    """Records the volatility indicator's value at every bar, so the final
+    (last-bar) value can be checked against a manual reference calculation."""
+
+    def __init__(self):
+        super().__init__()
+        self.last_volatility = None
+
+    def next(self):
+        super().next()
+        d = self.stocks[0]
+        if len(d) >= self.p.vol_lookback + 1:
+            self.last_volatility = self.indicators[d._name]["volatility"][0]
+
+
 class _PositionTrackingStrategy(MomentumStrategy):
     """MomentumStrategy subclass that records total stock position size
     after every bar, so tests can inspect pre-liquidation state instead of
@@ -163,6 +178,35 @@ def test_total_traded_value_accumulates_from_filled_orders():
 
     assert strategy.getposition(strategy.stocks[0]).size > 0
     assert strategy.total_traded_value > 0
+
+
+def test_volatility_indicator_uses_return_based_stdev_not_price_level():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    prices = _uptrend(n, daily_return=0.004, seed=5)
+    vol_lookback = 126
+
+    strategy = _run(
+        market,
+        {"UP": prices},
+        strategy_cls=_VolatilityRecordingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=vol_lookback,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+    )
+
+    prices_arr = np.array(prices)
+    daily_returns = np.diff(prices_arr) / prices_arr[:-1]
+    expected = np.std(daily_returns[-vol_lookback:])
+    # A price-level stdev over the same window would be orders of magnitude
+    # larger (price-scale, not return-scale) — asserting closeness to the
+    # return-based figure rules out a silent regression back to price-level.
+    assert strategy.last_volatility == pytest.approx(expected, rel=1e-6)
 
 
 def test_membership_only_rebalance_does_not_repeat_monthly():
