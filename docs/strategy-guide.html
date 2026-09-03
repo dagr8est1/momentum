@@ -784,7 +784,7 @@
         <tr>
           <td><code>strategy.py</code></td>
           <td><code>MomentumStrategy(bt.Strategy)</code> — the regime filter, trend filter, scoring loop, and order placement</td>
-          <td>The only place that touches <code>backtrader</code>'s per-bar <code>next()</code> lifecycle and broker/position APIs.</td>
+          <td>The only place that touches <code>backtrader</code>'s per-bar <code>next()</code> lifecycle and broker/position APIs. Also the only place that <em>can</em> track turnover — <code>notify_order()</code> accumulates every filled order's traded value, since that information doesn't exist in a returns series alone.</td>
         </tr>
         <tr>
           <td><code>config.py</code></td>
@@ -798,8 +798,8 @@
         </tr>
         <tr>
           <td><code>data.py</code></td>
-          <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by a local parquet cache</td>
-          <td>Cache is <strong>coverage-based</strong>: a cached file is reused only if its date range already covers the request; otherwise it re-fetches and merges. Also flattens the MultiIndex columns <code>yfinance</code> sometimes returns.</td>
+          <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by <strong>one combined, git-tracked parquet file</strong> (<code>cache_data/prices.parquet</code>) instead of per-ticker files</td>
+          <td>Long-format store (<code>ticker</code>, <code>Date</code>, OHLCV columns), loaded once per process and reused for every ticker in the run. Coverage-based, not time-based: a ticker's rows are reused only if their date range already covers the request; otherwise it downloads, merges, and rewrites the whole file. Checked into git specifically so a fresh clone has working data for any ticker/range someone has already fetched, with no network call. Also flattens the MultiIndex columns <code>yfinance</code> sometimes returns.</td>
         </tr>
         <tr>
           <td><code>backtest.py</code></td>
@@ -808,8 +808,8 @@
         </tr>
         <tr>
           <td><code>reporting.py</code></td>
-          <td>One-line wrapper around <code>quantstats.reports.html(...)</code></td>
-          <td>Replaced a ~230-line hand-rolled Excel reporting pipeline in the original prototype.</td>
+          <td>Generates the <code>quantstats</code> tearsheet, then injects a custom <strong>Summary Statistics</strong> block into the same HTML file</td>
+          <td>Backtest period, absolute/relative total return, CAGR (strategy vs. benchmark), Sharpe ratio, and annualized turnover — turnover isn't something <code>quantstats</code> can compute (it only sees returns, not trades), so it's tracked separately in <code>strategy.py</code>. Replaced a ~230-line hand-rolled Excel reporting pipeline in the original prototype.</td>
         </tr>
         <tr>
           <td><code>cli.py</code></td>
@@ -844,10 +844,14 @@ uv run momentum run configs/default.yaml --output results/tearsheet.html
 # run the test suite
 uv run pytest</code></pre>
       <p>
-        A run downloads (and caches under <code>.cache/</code>) OHLCV data for every ticker in
-        the universe plus the benchmark, executes the strategy over the configured date range,
-        and writes an HTML performance tearsheet (default <code>tearsheet.html</code>) comparing
-        the strategy's returns to the benchmark's.
+        A run reads OHLCV data for every ticker in the universe plus the benchmark from
+        <code>cache_data/prices.parquet</code> (checked into the repo) wherever it's already
+        covered there, downloading and adding only what's missing, then executes the strategy
+        over the configured date range and writes an HTML performance tearsheet (default
+        <code>tearsheet.html</code>) comparing the strategy's returns to the benchmark's — with a
+        <strong>Summary Statistics</strong> block (backtest period, absolute/relative return,
+        CAGR, Sharpe, annualized turnover) inserted at the top of the same file, ahead of the
+        full <code>quantstats</code> report.
       </p>
 
       <h3 id="running-sp500">Running against the S&amp;P 500 universe</h3>
@@ -861,7 +865,7 @@ uv run pytest</code></pre>
       <pre><code>benchmark: SPY
 start_date: "2022-01-01"
 end_date: "2024-12-31"
-cache_dir: .cache
+cache_dir: cache_data
 
 universe:
   source: index:sp500
@@ -881,18 +885,52 @@ strategy:
       <p>Saved as <code>configs/sp500.yaml</code>, run it the same way as any other config:</p>
       <pre><code>uv run momentum run configs/sp500.yaml --output tearsheet_sp500.html</code></pre>
       <div class="callout">
-        <strong>Verified: ~3 minutes on a partially-warm cache, 493/500 tickers used</strong>
-        This exact config was run end-to-end against the live S&amp;P&nbsp;500 constituent
-        list. Total wall time was <strong>~3 minutes</strong> to fetch/cache three years of
-        history for ~500 tickers and run the backtest. 7 tickers were skipped automatically,
-        each logged as a warning rather than failing the run: a few no longer resolve on Yahoo
-        Finance (ticker changes since the snapshot), and a few recently-listed spinoffs/IPOs
-        (e.g. <code>GEV</code>, <code>SOLV</code>, <code>RDDT</code>) don't yet have the ~253
-        trading days of history the default lookbacks require — see the
+        <strong>Verified: ~3 minutes end-to-end, 493/500 tickers used</strong>
+        This exact config was run against the live S&amp;P&nbsp;500 constituent list, with three
+        years of history for all ~500 tickers already sitting in the committed
+        <code>cache_data/prices.parquet</code> — most of the ~3&nbsp;minute wall time is the
+        backtest's own per-bar computation across ~493 stocks, not data fetching. 7 tickers were
+        skipped automatically, each logged as a warning rather than failing the run: a few no
+        longer resolve on Yahoo Finance (ticker changes since the snapshot), and a few
+        recently-listed spinoffs/IPOs (e.g. <code>GEV</code>, <code>SOLV</code>, <code>RDDT</code>)
+        don't yet have the ~253 trading days of history the default lookbacks require — see the
         <code>_min_required_bars</code> check in <code>backtest.py</code>, added specifically to
-        turn that case into a clean skip instead of a crash. Every ticker gets cached to
-        <code>.cache/&lt;TICKER&gt;.parquet</code>, so a second run against the same or a
-        narrower range is fast — the cache is coverage-based, not time-based.
+        turn that case into a clean skip instead of a crash. On a fresh clone with no cache at
+        all, expect this same run to take noticeably longer the first time, purely on data-fetch
+        time — and whatever it fetches gets added to <code>cache_data/prices.parquet</code> for
+        next time.
+      </div>
+
+      <h4 style="margin-top:20px">Real output from this run — Summary Statistics</h4>
+      <p>
+        Every run now writes a <strong>Summary Statistics</strong> block into the top of the
+        tearsheet HTML itself (see <code>reporting.py</code> in the module reference above) —
+        not illustrative, this table is the actual block generated by the run above:
+      </p>
+      <div class="table-scroll" style="overflow-x:auto">
+      <table class="worked-table">
+        <tr><th>Metric</th><th class="num">Strategy</th><th class="num">Benchmark (SPY)</th></tr>
+        <tr><td>Backtest period</td><td colspan="2">2022-01-03 to 2024-12-30 (~3.0 years)</td></tr>
+        <tr><td>Total return (absolute)</td><td class="num">−2.0%</td><td class="num">+28.7%</td></tr>
+        <tr class="winner"><td>Relative total return</td><td colspan="2" class="num">−30.7% (strategy − benchmark)</td></tr>
+        <tr><td>Annualized return (CAGR)</td><td class="num">−0.7%</td><td class="num">+8.8%</td></tr>
+        <tr class="winner"><td>Relative CAGR</td><td colspan="2" class="num">−9.5% (strategy − benchmark)</td></tr>
+        <tr><td>Sharpe ratio</td><td class="num">−0.03</td><td class="num">0.57</td></tr>
+        <tr><td>Annualized turnover</td><td colspan="2" class="num">4.06x per year</td></tr>
+      </table>
+      </div>
+      <div class="methodology-note">
+        <strong>The strategy actually lost to the benchmark here — and that's worth sitting with</strong>
+        This isn't a cherry-picked or illustrative number; it's the real result of the exact
+        config above, over 2022–2024. A momentum strategy trailing a simple buy-and-hold
+        benchmark by ~9.5 points of CAGR, with a negative Sharpe ratio, is a legitimate
+        red flag — and a plausible contributor is sitting in <a href="#slide-combine">slide&nbsp;8</a>
+        and <a href="#slide-sizing">slide&nbsp;10</a>: if the combined score is effectively
+        "mostly sort by dollar price change," and sizing systematically overweights low-priced
+        names regardless of actual risk, the resulting book may look quite different from what
+        the three-factor, risk-parity-tilted design intends. This is exactly the kind of result
+        that should prompt fixing the units-mismatch and price-level-volatility issues before
+        drawing any conclusion about momentum investing itself from this backtest.
       </div>
       <ul>
         <li>Needs network access to both <code>en.wikipedia.org</code> (constituent scrape) and Yahoo Finance (price data).</li>
@@ -914,7 +952,7 @@ strategy:
         <tr><th>Field</th><th>Meaning</th><th>Default in <code>configs/default.yaml</code></th></tr>
         <tr><td><code>benchmark</code></td><td>Ticker used for the regime filter and as the tearsheet's comparison series</td><td><code>SPY</code></td></tr>
         <tr><td><code>start_date</code> / <code>end_date</code></td><td>Backtest date range</td><td><code>2022-01-01</code> → <code>2024-12-31</code></td></tr>
-        <tr><td><code>cache_dir</code></td><td>Local parquet cache location</td><td><code>.cache</code></td></tr>
+        <tr><td><code>cache_dir</code></td><td>Directory holding the combined, git-tracked <code>prices.parquet</code> cache</td><td><code>cache_data</code></td></tr>
         <tr><td><code>universe.source</code></td><td><code>static</code> or <code>index:sp500</code></td><td><code>static</code>, ~140 tickers</td></tr>
         <tr><td><code>strategy.lookbacks</code></td><td>Momentum blend horizons (trading days)</td><td><code>[60, 120, 252]</code></td></tr>
         <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>5</code></td></tr>
@@ -934,7 +972,7 @@ strategy:
         <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. Also covers the two insufficient-history cases: a too-short benchmark raises <code>ValueError</code>, a too-short ticker is logged and skipped. This is the regression guard for cross-module wiring.</li>
         <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
       </ul>
-      <p>All 35 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
+      <p>All 38 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
     </section>
 
     <!-- ============================================================ -->
@@ -950,9 +988,10 @@ strategy:
         <ul style="margin-bottom:0">
           <li><strong>Scoring math is framework-agnostic.</strong> <code>scoring.py</code> has zero <code>backtrader</code> imports specifically so the strategy's core logic can be unit tested in milliseconds, without a full backtest run.</li>
           <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top&nbsp;5 for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
-          <li><strong>Cache is coverage-based, not time-based.</strong> <code>data.py</code> re-fetches only when the cached date range doesn't cover what's requested — not on a TTL — so re-running the same backtest twice does zero network calls the second time.</li>
+          <li><strong>Cache is one combined, git-tracked file, and coverage-based rather than time-based.</strong> <code>data.py</code> keeps every ticker's OHLCV history in a single <code>cache_data/prices.parquet</code> (long format: <code>ticker</code>, <code>Date</code>, OHLCV), checked into the repo so a fresh clone has working data for anything already fetched — no network call needed. A ticker's rows are reused only when their date range already covers what's requested, not on a TTL, so re-running the same backtest twice does zero network calls the second time either way.</li>
           <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
           <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
+          <li><strong>Turnover has to be tracked at the trade level, not derived from returns.</strong> Every other headline stat (CAGR, Sharpe, total return) is a pure function of the returns series and comes straight from <code>quantstats</code>. Turnover needs actual traded dollar value, which only exists inside <code>backtrader</code>'s order lifecycle — hence <code>MomentumStrategy.notify_order()</code> accumulating it, threaded back through <code>run_backtest()</code>'s return value into <code>reporting.py</code>.</li>
           <li><strong>Data-length validation added after a real bug.</strong> Testing the S&amp;P&nbsp;500 universe against a too-short date range crashed with a raw backtrader <code>IndexError</code> — the fix (<code>backtest.py::_min_required_bars</code>) validates every feed's length against the configured lookbacks upfront, converting that into either a clear error (benchmark) or a graceful skip (ticker), matching the existing missing-data philosophy rather than inventing a new one.</li>
         </ul>
       </div>

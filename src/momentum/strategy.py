@@ -43,6 +43,7 @@ class MomentumStrategy(bt.Strategy):
         self.last_rebalanced_stocks = []
         self.last_rebalance_date = None
         self.rebalance_count = 0
+        self.total_traded_value = 0.0
 
         max_overall_lookback = max(
             self.p.regime_ma_period,
@@ -53,6 +54,10 @@ class MomentumStrategy(bt.Strategy):
             self.p.ts_mom_lookback,
         )
         self.addminperiod(max_overall_lookback)
+
+    def notify_order(self, order):
+        if order.status == order.Completed:
+            self.total_traded_value += abs(order.executed.value)
 
     def _momentum_score(self, d):
         window = np.array(d.close.get(size=self._max_momentum_lookback + 1))

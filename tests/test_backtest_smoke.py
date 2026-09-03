@@ -21,7 +21,19 @@ def _synthetic_ohlcv(start, periods, daily_return, seed):
 
 def _seed_cache(cache_dir, ticker, df):
     cache_dir.mkdir(parents=True, exist_ok=True)
-    df.to_parquet(cache_dir / f"{ticker}.parquet")
+    path = cache_dir / "prices.parquet"
+
+    to_store = df.copy()
+    to_store.index.name = "Date"
+    to_store = to_store.reset_index()
+    to_store.insert(0, "ticker", ticker)
+
+    if path.exists():
+        existing = pd.read_parquet(path)
+        existing = existing[existing["ticker"] != ticker]
+        to_store = pd.concat([existing, to_store], ignore_index=True)
+
+    to_store.to_parquet(path)
 
 
 def test_run_backtest_end_to_end_with_cached_data(tmp_path, monkeypatch):
@@ -57,11 +69,12 @@ def test_run_backtest_end_to_end_with_cached_data(tmp_path, monkeypatch):
         cache_dir=str(cache_dir),
     )
 
-    portfolio_returns, benchmark_returns = run_backtest(config)
+    portfolio_returns, benchmark_returns, stats = run_backtest(config)
 
     assert not portfolio_returns.empty
     assert not benchmark_returns.empty
     assert isinstance(portfolio_returns.index, pd.DatetimeIndex)
+    assert stats["turnover"] >= 0
 
 
 def test_run_backtest_raises_when_benchmark_data_missing(tmp_path, monkeypatch):
@@ -156,7 +169,7 @@ def test_run_backtest_logs_warning_for_ticker_with_insufficient_history(tmp_path
     )
 
     with caplog.at_level(logging.WARNING, logger="momentum.backtest"):
-        portfolio_returns, benchmark_returns = run_backtest(config)
+        portfolio_returns, benchmark_returns, stats = run_backtest(config)
 
     assert "NEWLISTING" in caplog.text
     assert not portfolio_returns.empty

@@ -70,7 +70,7 @@ def test_load_config_uses_default_cache_dir_when_omitted(tmp_path):
 
     config = load_config(config_path)
 
-    assert config.cache_dir == ".cache"
+    assert config.cache_dir == "cache_data"
 
 
 def test_load_config_raises_on_missing_required_field(tmp_path):

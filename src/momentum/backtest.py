@@ -12,6 +12,8 @@ from momentum.universe import resolve_universe
 
 logger = logging.getLogger(__name__)
 
+_STARTING_CASH = 100_000.0
+
 
 def _min_required_bars(strategy: StrategyConfig) -> int:
     """Fewest trading days a data feed needs for every configured indicator.
@@ -33,7 +35,22 @@ def _min_required_bars(strategy: StrategyConfig) -> int:
     )
 
 
-def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series]:
+def _annualized_turnover(
+    total_traded_value: float, portfolio_returns: pd.Series, starting_cash: float
+) -> float:
+    """Total traded (buy+sell) value, per year of backtest, as a multiple of
+    average portfolio value — e.g. 3.0 means the book turned over 3x/year."""
+    if portfolio_returns.empty:
+        return 0.0
+    portfolio_values = starting_cash * (1 + portfolio_returns).cumprod()
+    avg_value = portfolio_values.mean()
+    years = (portfolio_returns.index.max() - portfolio_returns.index.min()).days / 365.25
+    if avg_value <= 0 or years <= 0:
+        return 0.0
+    return total_traded_value / avg_value / years
+
+
+def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
     cache_dir = Path(config.cache_dir)
     min_bars = _min_required_bars(config.strategy)
 
@@ -79,7 +96,7 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series]:
 
     cerebro.addstrategy(MomentumStrategy, **asdict(config.strategy))
     cerebro.addanalyzer(bt.analyzers.TimeReturn, _name="timereturn")
-    cerebro.broker.setcash(100_000.0)
+    cerebro.broker.setcash(_STARTING_CASH)
 
     results = cerebro.run()
     strategy = results[0]
@@ -90,4 +107,10 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series]:
     benchmark_returns = benchmark_df["Close"].pct_change().dropna()
     benchmark_returns.index = pd.to_datetime(benchmark_returns.index)
 
-    return portfolio_returns, benchmark_returns
+    stats = {
+        "turnover": _annualized_turnover(
+            strategy.total_traded_value, portfolio_returns, _STARTING_CASH
+        ),
+    }
+
+    return portfolio_returns, benchmark_returns, stats

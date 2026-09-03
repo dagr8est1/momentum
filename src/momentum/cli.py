@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     config = load_config(args.config_path)
-    returns, benchmark_returns = run_backtest(config)
-    generate_tearsheet(returns, benchmark_returns, args.output)
+    returns, benchmark_returns, stats = run_backtest(config)
+    generate_tearsheet(returns, benchmark_returns, args.output, turnover=stats["turnover"])
     print(f"Tearsheet written to {args.output}")
     return 0

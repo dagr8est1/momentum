@@ -26,7 +26,7 @@ class RunConfig:
     end_date: str
     universe: dict
     strategy: StrategyConfig
-    cache_dir: str = ".cache"
+    cache_dir: str = "cache_data"
 
 
 _REQUIRED_FIELDS = ["benchmark", "start_date", "end_date", "universe"]
@@ -58,5 +58,5 @@ def load_config(path: str | Path) -> RunConfig:
         end_date=raw["end_date"],
         universe=raw["universe"],
         strategy=strategy,
-        cache_dir=raw.get("cache_dir", ".cache"),
+        cache_dir=raw.get("cache_dir", "cache_data"),
     )

@@ -17,12 +17,13 @@ def test_main_run_command_wires_config_backtest_and_reporting(tmp_path, monkeypa
 
     def _fake_run_backtest(config):
         calls["config"] = config
-        return fake_returns, fake_benchmark
+        return fake_returns, fake_benchmark, {"turnover": 1.5}
 
-    def _fake_generate_tearsheet(returns, benchmark, output_path):
+    def _fake_generate_tearsheet(returns, benchmark, output_path, turnover=None):
         calls["returns"] = returns
         calls["benchmark"] = benchmark
         calls["output_path"] = output_path
+        calls["turnover"] = turnover
 
     monkeypatch.setattr(cli, "run_backtest", _fake_run_backtest)
     monkeypatch.setattr(cli, "generate_tearsheet", _fake_generate_tearsheet)
@@ -32,4 +33,5 @@ def test_main_run_command_wires_config_backtest_and_reporting(tmp_path, monkeypa
     assert exit_code == 0
     assert calls["config"].benchmark == "SPY"
     assert calls["output_path"] == str(output_path)
+    assert calls["turnover"] == 1.5
     assert str(output_path) in capsys.readouterr().out

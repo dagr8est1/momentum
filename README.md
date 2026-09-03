@@ -23,10 +23,13 @@ just venv
 uv run momentum run configs/default.yaml
 ```
 
-This downloads (and locally caches under `.cache/`) price data for the
-configured universe and benchmark, runs the momentum strategy, and writes an
-HTML performance tearsheet to `tearsheet.html`. Pass `--output <path>` to
-change the tearsheet location.
+Price data for the configured universe and benchmark is read from
+`cache_data/prices.parquet` (checked into the repo) when it's already
+covered there; anything missing is downloaded and added to that same file,
+so a fresh clone works offline for any ticker/date range already fetched by
+someone else. The strategy then runs and writes an HTML performance
+tearsheet to `tearsheet.html`. Pass `--output <path>` to change the
+tearsheet location.
 
 ## Configuring a run
 

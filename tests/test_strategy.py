@@ -143,6 +143,28 @@ def test_periodic_rebalance_fires_without_membership_change():
     assert strategy.rebalance_count > 1
 
 
+def test_total_traded_value_accumulates_from_filled_orders():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    stocks = {"UP": _uptrend(n, daily_return=0.004, seed=1)}
+
+    strategy = _run(
+        market,
+        stocks,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+    )
+
+    assert strategy.getposition(strategy.stocks[0]).size > 0
+    assert strategy.total_traded_value > 0
+
+
 def test_membership_only_rebalance_does_not_repeat_monthly():
     n = 400
     market = _uptrend(n, daily_return=0.001)
