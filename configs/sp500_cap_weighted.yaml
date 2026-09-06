@@ -1,0 +1,21 @@
+benchmark: SPY
+start_date: "2022-01-01"
+end_date: "2024-12-31"
+cache_dir: cache_data
+
+universe:
+  source: index:sp500
+
+strategy:
+  lookbacks: [60, 120, 252]
+  top_n: 5
+  vol_lookback: 126
+  skewness_lookback: 90
+  fip_lookback: 252
+  ts_mom_lookback: 200
+  regime_ma_period: 200
+  momentum_weight: 0.5
+  fip_weight: 0.5
+  skewness_penalty: 0.5
+  rebalance_frequency: monthly
+  sizing_method: cap_weighted

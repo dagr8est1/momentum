@@ -2,7 +2,12 @@ import backtrader as bt
 import numpy as np
 
 from momentum.indicators import DownsideDeviation, FrogInThePan, RollingSkewness
-from momentum.scoring import combined_score, inverse_vol_weights, momentum_blend
+from momentum.scoring import (
+    cap_weighted_inverse_vol_weights,
+    combined_score,
+    inverse_vol_weights,
+    momentum_blend,
+)
 
 
 class MomentumStrategy(bt.Strategy):
@@ -18,6 +23,8 @@ class MomentumStrategy(bt.Strategy):
         fip_weight=0.5,
         skewness_penalty=0.5,
         rebalance_frequency="monthly",
+        sizing_method="inverse_vol",
+        shares_outstanding={},
     )
 
     def __init__(self):
@@ -139,7 +146,14 @@ class MomentumStrategy(bt.Strategy):
             return
 
         vols = {d._name: self.indicators[d._name]["volatility"][0] for d in new_top}
-        weights = inverse_vol_weights(vols)
+        if self.p.sizing_method == "cap_weighted":
+            market_caps = {
+                d._name: self.p.shares_outstanding.get(d._name, 0.0) * d.close[0]
+                for d in new_top
+            }
+            weights = cap_weighted_inverse_vol_weights(market_caps, vols)
+        else:
+            weights = inverse_vol_weights(vols)
         # A small safety buffer is subtracted from total portfolio value before
         # sizing: order_target_value sizes against today's close, but the
         # default broker fills market orders at the *next* bar's open. For a

@@ -17,6 +17,7 @@ class StrategyConfig:
     fip_weight: float = 0.5
     skewness_penalty: float = 0.5
     rebalance_frequency: str | None = "monthly"
+    sizing_method: str = "inverse_vol"
 
 
 @dataclass
@@ -50,6 +51,12 @@ def load_config(path: str | Path) -> RunConfig:
         raise ValueError(
             f"Invalid rebalance_frequency: {strategy.rebalance_frequency!r} "
             "(must be None or 'monthly')"
+        )
+
+    if strategy.sizing_method not in ("inverse_vol", "cap_weighted"):
+        raise ValueError(
+            f"Invalid sizing_method: {strategy.sizing_method!r} "
+            "(must be 'inverse_vol' or 'cap_weighted')"
         )
 
     return RunConfig(

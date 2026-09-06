@@ -214,6 +214,71 @@ def test_volatility_indicator_uses_downside_deviation_not_full_stdev():
     assert strategy.last_volatility < full_stdev
 
 
+def test_cap_weighted_sizing_favors_larger_market_cap():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    # Identical price paths -> identical momentum/volatility/FIP/skew, so
+    # any weight difference must come from the market-cap tilt, not scoring.
+    prices = _uptrend(n, daily_return=0.004, seed=9)
+    stocks = {"BIGCAP": prices, "SMALLCAP": list(prices)}
+
+    strategy = _run(
+        market,
+        stocks,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=2,
+        rebalance_frequency=None,
+        sizing_method="cap_weighted",
+        shares_outstanding={"BIGCAP": 300.0, "SMALLCAP": 100.0},
+    )
+
+    big = next(d for d in strategy.stocks if d._name == "BIGCAP")
+    small = next(d for d in strategy.stocks if d._name == "SMALLCAP")
+    big_size = strategy.getposition(big).size
+    small_size = strategy.getposition(small).size
+
+    assert big_size > 0 and small_size > 0
+    # Same price series -> position value ratio == position size ratio;
+    # 3x the shares outstanding at an identical price is 3x the market cap.
+    assert big_size / small_size == pytest.approx(3.0, rel=0.05)
+
+
+def test_default_sizing_ignores_shares_outstanding():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    prices = _uptrend(n, daily_return=0.004, seed=9)
+    stocks = {"A": prices, "B": list(prices)}
+
+    strategy = _run(
+        market,
+        stocks,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=2,
+        rebalance_frequency=None,
+        # sizing_method left at its "inverse_vol" default; shares_outstanding
+        # is supplied anyway to prove it's a no-op outside cap_weighted mode.
+        shares_outstanding={"A": 300.0, "B": 100.0},
+    )
+
+    a = next(d for d in strategy.stocks if d._name == "A")
+    b = next(d for d in strategy.stocks if d._name == "B")
+    a_size = strategy.getposition(a).size
+    b_size = strategy.getposition(b).size
+
+    assert a_size > 0 and b_size > 0
+    assert a_size / b_size == pytest.approx(1.0, rel=0.05)
+
+
 def test_membership_only_rebalance_does_not_repeat_monthly():
     n = 400
     market = _uptrend(n, daily_return=0.001)

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from momentum.scoring import (
+    cap_weighted_inverse_vol_weights,
     combined_score,
     downside_deviation,
     fip_score,
@@ -88,4 +89,40 @@ def test_inverse_vol_weights_excludes_zero_volatility():
 
 def test_inverse_vol_weights_all_zero_returns_all_zero():
     weights = inverse_vol_weights({"a": 0.0, "b": 0.0})
+    assert weights == {"a": 0.0, "b": 0.0}
+
+
+def test_cap_weighted_inverse_vol_favors_larger_cap_at_equal_volatility():
+    weights = cap_weighted_inverse_vol_weights(
+        market_caps={"big": 200.0, "small": 100.0},
+        volatilities={"big": 1.0, "small": 1.0},
+    )
+    assert weights["big"] == pytest.approx(2 / 3)
+    assert weights["small"] == pytest.approx(1 / 3)
+
+
+def test_cap_weighted_inverse_vol_still_penalizes_higher_volatility():
+    # Same market cap, but "volatile" has 4x the volatility of "calm" ->
+    # cap/vol scores are 100 and 25, i.e. calm should get 4x the weight.
+    weights = cap_weighted_inverse_vol_weights(
+        market_caps={"calm": 100.0, "volatile": 100.0},
+        volatilities={"calm": 1.0, "volatile": 4.0},
+    )
+    assert weights["calm"] == pytest.approx(0.8)
+    assert weights["volatile"] == pytest.approx(0.2)
+
+
+def test_cap_weighted_inverse_vol_excludes_missing_market_cap():
+    weights = cap_weighted_inverse_vol_weights(
+        market_caps={"has_cap": 100.0},
+        volatilities={"has_cap": 1.0, "no_cap": 1.0},
+    )
+    assert weights["has_cap"] == pytest.approx(1.0)
+    assert weights["no_cap"] == 0.0
+
+
+def test_cap_weighted_inverse_vol_all_zero_returns_all_zero():
+    weights = cap_weighted_inverse_vol_weights(
+        market_caps={"a": 0.0, "b": 0.0}, volatilities={"a": 1.0, "b": 1.0}
+    )
     assert weights == {"a": 0.0, "b": 0.0}

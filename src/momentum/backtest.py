@@ -6,7 +6,7 @@ import backtrader as bt
 import pandas as pd
 
 from momentum.config import RunConfig, StrategyConfig
-from momentum.data import load_prices
+from momentum.data import load_prices, load_shares_outstanding
 from momentum.strategy import MomentumStrategy
 from momentum.universe import resolve_universe
 
@@ -69,6 +69,7 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
     cerebro.adddata(bt.feeds.PandasData(dataname=benchmark_df, name=config.benchmark))
 
     tickers = resolve_universe(config.universe)
+    added_tickers = []
     for ticker in tickers:
         if ticker == config.benchmark:
             continue
@@ -93,8 +94,17 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
             )
             continue
         cerebro.adddata(bt.feeds.PandasData(dataname=df, name=ticker))
+        added_tickers.append(ticker)
 
-    cerebro.addstrategy(MomentumStrategy, **asdict(config.strategy))
+    shares_outstanding = {}
+    if config.strategy.sizing_method == "cap_weighted":
+        shares_outstanding = {
+            t: load_shares_outstanding(t, cache_dir) for t in added_tickers
+        }
+
+    cerebro.addstrategy(
+        MomentumStrategy, shares_outstanding=shares_outstanding, **asdict(config.strategy)
+    )
     cerebro.addanalyzer(bt.analyzers.TimeReturn, _name="timereturn")
     cerebro.broker.setcash(_STARTING_CASH)
 

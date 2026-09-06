@@ -5,10 +5,69 @@ import yfinance as yf
 
 _COMBINED_FILENAME = "prices.parquet"
 _COLUMNS = ["ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
+_SHARES_FILENAME = "shares_outstanding.parquet"
 
 # Combined store is loaded once per cache_dir and reused for every ticker in
 # a run, instead of re-reading the (potentially large) file on every call.
 _combined_cache: dict[str, pd.DataFrame] = {}
+_shares_cache: dict[str, pd.DataFrame] = {}
+
+
+def load_shares_outstanding(ticker: str, cache_dir: Path) -> float:
+    """Current shares outstanding for `ticker`, cached indefinitely.
+
+    Used as a market-cap proxy: market_cap(t) = shares_outstanding * close(t).
+    Share counts drift slowly (buybacks/issuance) relative to price, so a
+    single current snapshot is a reasonable approximation across a
+    multi-year backtest — but it does mean this uses information (today's
+    share count) that wasn't actually known on historical rebalance dates.
+    Returns 0.0 if unavailable, so callers can treat it like "no data".
+    """
+    cache_dir = Path(cache_dir)
+    combined = _load_shares_cache(cache_dir)
+
+    rows = combined[combined["ticker"] == ticker]
+    if not rows.empty:
+        return float(rows.iloc[0]["shares"])
+
+    shares = _download_shares(ticker)
+    if shares:
+        _store_shares(cache_dir, combined, ticker, shares)
+    return float(shares or 0.0)
+
+
+def _shares_path(cache_dir: Path) -> Path:
+    return cache_dir / _SHARES_FILENAME
+
+
+def _load_shares_cache(cache_dir: Path) -> pd.DataFrame:
+    path = _shares_path(cache_dir)
+    key = str(path)
+    if key not in _shares_cache:
+        if path.exists():
+            _shares_cache[key] = pd.read_parquet(path)
+        else:
+            _shares_cache[key] = pd.DataFrame(columns=["ticker", "shares"])
+    return _shares_cache[key]
+
+
+def _store_shares(cache_dir: Path, combined: pd.DataFrame, ticker: str, shares: float) -> None:
+    other = combined[combined["ticker"] != ticker]
+    new_row = pd.DataFrame([{"ticker": ticker, "shares": shares}])
+    updated = new_row if other.empty else pd.concat([other, new_row], ignore_index=True)
+
+    path = _shares_path(cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    updated.to_parquet(path)
+    _shares_cache[str(path)] = updated
+
+
+def _download_shares(ticker: str) -> float | None:
+    try:
+        shares = yf.Ticker(ticker).fast_info.get("shares")
+    except Exception:
+        return None
+    return float(shares) if shares else None
 
 
 def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFrame:

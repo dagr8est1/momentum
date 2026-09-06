@@ -137,3 +137,54 @@ def test_load_prices_updating_one_ticker_preserves_others(tmp_path, monkeypatch)
     assert set(on_disk["ticker"]) == {"MSFT", "AAPL"}
     assert (on_disk["ticker"] == "AAPL").sum() == 10
     assert (on_disk["ticker"] == "MSFT").sum() == 15
+
+
+class _FakeFastInfo(dict):
+    pass
+
+
+class _FakeTicker:
+    def __init__(self, shares):
+        self.fast_info = _FakeFastInfo(shares=shares)
+
+
+def test_load_shares_outstanding_downloads_and_caches(tmp_path, monkeypatch):
+    calls = []
+
+    def _fake_yf_ticker(ticker):
+        calls.append(ticker)
+        return _FakeTicker(shares=1_000_000.0)
+
+    monkeypatch.setattr(yf, "Ticker", _fake_yf_ticker)
+
+    result = data.load_shares_outstanding("AAPL", tmp_path)
+
+    assert result == 1_000_000.0
+    assert calls == ["AAPL"]
+    assert (tmp_path / "shares_outstanding.parquet").exists()
+
+
+def test_load_shares_outstanding_reuses_cache_without_redownloading(tmp_path, monkeypatch):
+    pd.DataFrame([{"ticker": "AAPL", "shares": 2_000_000.0}]).to_parquet(
+        tmp_path / "shares_outstanding.parquet"
+    )
+
+    def _fail_ticker(ticker):
+        raise AssertionError("should not re-fetch a cached ticker")
+
+    monkeypatch.setattr(yf, "Ticker", _fail_ticker)
+
+    result = data.load_shares_outstanding("AAPL", tmp_path)
+
+    assert result == 2_000_000.0
+
+
+def test_load_shares_outstanding_returns_zero_when_unavailable(tmp_path, monkeypatch):
+    def _raise(ticker):
+        raise Exception("no data")
+
+    monkeypatch.setattr(yf, "Ticker", _raise)
+
+    result = data.load_shares_outstanding("MISSING", tmp_path)
+
+    assert result == 0.0
