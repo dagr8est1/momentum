@@ -1120,11 +1120,12 @@ strategy:
         (<code>top_n</code>, 5 by default) mattered. Standard diversification research suggests it
         takes roughly 20-30 stocks to diversify away most single-stock risk, so 5 is a genuinely
         concentrated bet. This was tested directly — four real runs of the identical (now-fixed)
-        config, varying only <code>top_n</code>:
+        config, varying only <code>top_n</code> with the default sizing method held fixed
+        (sizing method × <code>top_n</code> combinations are tested separately, two sections down):
       </p>
       <div class="table-scroll" style="overflow-x:auto">
       <table class="worked-table">
-        <tr><th>top_n</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return</th></tr>
+        <tr><th>top_n</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return (absolute)</th></tr>
         <tr><td>5 (documented default)</td><td class="num">+1.5%</td><td class="num">0.28</td><td class="num">1.73x</td><td class="num">+4.4%</td></tr>
         <tr class="winner"><td>10</td><td class="num">+2.8%</td><td class="num">0.53</td><td class="num">2.80x</td><td class="num">+8.6%</td></tr>
         <tr><td>15</td><td class="num">+1.5%</td><td class="num">0.35</td><td class="num">2.29x</td><td class="num">+4.5%</td></tr>
@@ -1164,11 +1165,15 @@ strategy:
         <code>fast_info</code> and cached in <code>cache_data/shares_outstanding.parquet</code>,
         combined with each day's already-cached close price to approximate market cap at every
         rebalance (<code>scoring.cap_weighted_inverse_vol_weights()</code>, selectable via
-        <code>strategy.sizing_method: cap_weighted</code>).
+        <code>strategy.sizing_method: cap_weighted</code>). The comparison below holds
+        <code>top_n</code> fixed at the default of 5 — it isolates the sizing-method variable the
+        same way the table above isolated <code>top_n</code>. Neither row here beats the
+        benchmark; the combination that does (<code>cap_weighted</code> at <code>top_n=10</code>)
+        is in the grid two sections down.
       </p>
       <div class="table-scroll" style="overflow-x:auto">
       <table class="worked-table">
-        <tr><th>Sizing method</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return</th></tr>
+        <tr><th>Sizing method (top_n=5)</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return (absolute)</th></tr>
         <tr class="winner"><td>inverse_vol + downside deviation (current default)</td><td class="num">+1.5%</td><td class="num">0.28</td><td class="num">1.73x</td><td class="num">+4.4%</td></tr>
         <tr><td>cap_weighted (tested)</td><td class="num">+0.8%</td><td class="num">0.16</td><td class="num">1.74x</td><td class="num">+2.4%</td></tr>
       </table>
