@@ -359,8 +359,7 @@
     <a class="sub" href="#testing">Testing</a>
     <a href="#research">3 · The Research Process</a>
     <a class="sub" href="#research-at-a-glance">Investigation at a glance</a>
-    <a class="sub" href="#research-steps">Step by step</a>
-    <a class="sub" href="#exploring-topn">Exploring top_n</a>
+    <a class="sub" href="#research-steps">Results by top_n</a>
     <a class="sub" href="#exploring-cap-weighted">Exploring cap-weighted sizing</a>
     <a class="sub" href="#exploring-grid">Sizing × top_n grid</a>
     <a class="sub" href="#research-qa">Research Q&amp;A</a>
@@ -1113,52 +1112,15 @@ strategy:
         universe too).
       </div>
 
-      <h3 id="research-steps">Step by step: what the numbers looked like after each fix</h3>
+      <h3 id="research-steps">Results for each portfolio size (top_n)</h3>
       <p>
-        Every run below used the exact same config (live S&amp;P&nbsp;500 list, 2022–2024,
-        identical settings) — only one line of code changed between columns:
-      </p>
-      <div class="table-scroll" style="overflow-x:auto">
-      <table class="worked-table">
-        <tr><th>Metric</th><th class="num">Original (both bugs)</th><th class="num">+ momentum fix</th><th class="num">+ sizing fix</th><th class="num">+ downside dev. (current)</th><th class="num">Benchmark (SPY)</th></tr>
-        <tr><td>Backtest period</td><td colspan="5">2022-01-03 to 2024-12-30 (~3.0 years), identical run every time</td></tr>
-        <tr><td>Total return (absolute)</td><td class="num">−2.0%</td><td class="num">+0.9%</td><td class="num">+4.2%</td><td class="num">+4.4%</td><td class="num">+28.7%</td></tr>
-        <tr><td>Relative total return</td><td class="num">−30.7%</td><td class="num">−27.8%</td><td class="num">−24.4%</td><td class="num">−24.3%</td><td>vs. benchmark</td></tr>
-        <tr><td>Annualized return (CAGR)</td><td class="num">−0.7%</td><td class="num">+0.3%</td><td class="num">+1.4%</td><td class="num">+1.5%</td><td class="num">+8.8%</td></tr>
-        <tr><td>Relative CAGR</td><td class="num">−9.5%</td><td class="num">−8.5%</td><td class="num">−7.4%</td><td class="num">−7.4%</td><td>vs. benchmark</td></tr>
-        <tr class="winner"><td>Sharpe ratio</td><td class="num">−0.03</td><td class="num">0.08</td><td class="num">0.28</td><td class="num">0.28</td><td class="num">0.57</td></tr>
-        <tr class="winner"><td>Annualized turnover</td><td class="num">4.06x</td><td class="num">2.42x</td><td class="num">1.79x</td><td class="num">1.73x</td><td>per year</td></tr>
-      </table>
-      </div>
-      <div class="methodology-note">
-        <strong>Two real fixes, one neutral refinement — and still a real, honest gap</strong>
-        Each column is the exact same config, re-run after one more change:
-        <a href="#slide-momentum">momentum → percentage return</a>, then
-        <a href="#slide-sizing">sizing → return-based volatility</a>, then
-        <a href="#slide-sizing">sizing → downside deviation</a>. The first two were genuine bug
-        fixes and both measurably helped — Sharpe went from negative (worse than holding cash) to
-        0.28, CAGR from −0.7% to +1.4%, turnover fell by more than half. The third was a
-        theoretically sound refinement (same idea as the Sortino ratio, a well-known variant of the
-        Sharpe ratio that only counts downside moves as risk) that measured as a wash: 0.28→0.28
-        Sharpe, +1.4%→+1.5% CAGR — reported exactly as measured, not spun into a third "win."
-        <br><br>
-        Even the two real fixes are nowhere near enough to close a ~7.4-point CAGR gap to the
-        benchmark. 2022 was also a documented difficult year for momentum strategies broadly (a
-        rate-shock regime), so some of the remaining gap may be the market environment rather than
-        anything left to fix here. The honest conclusion from one 3-year window over one universe
-        is "two real bugs materially hurt performance, now fixed" — not "this strategy now beats
-        the market" or "momentum doesn't work." Answering either of those needs walk-forward
-        validation (testing across several separate historical periods instead of just one) across
-        multiple periods, which this tool deliberately doesn't do.
-      </div>
-
-      <h3 id="exploring-topn">Exploring top_n — a concentration hypothesis, tested and not adopted</h3>
-      <p>
-        A natural follow-up question: is <code>top_n: 5</code> (holding only 5 stocks at once) too
-        concentrated? Standard diversification research suggests it takes roughly 20-30 stocks to
-        diversify away most single-stock risk, so 5 genuinely is an aggressive, concentrated bet.
-        This was tested directly — four real runs of the identical config, varying only
-        <code>top_n</code>:
+        Two real bugs were found and fixed along the way — see the "investigation at a glance"
+        table above for exactly what they were and their measured before/after impact. Once fixed,
+        the natural next question was whether the number of stocks held at once
+        (<code>top_n</code>, 5 by default) mattered. Standard diversification research suggests it
+        takes roughly 20-30 stocks to diversify away most single-stock risk, so 5 is a genuinely
+        concentrated bet. This was tested directly — four real runs of the identical (now-fixed)
+        config, varying only <code>top_n</code>:
       </p>
       <div class="table-scroll" style="overflow-x:auto">
       <table class="worked-table">
@@ -1167,6 +1129,7 @@ strategy:
         <tr class="winner"><td>10</td><td class="num">+2.8%</td><td class="num">0.53</td><td class="num">2.80x</td><td class="num">+8.6%</td></tr>
         <tr><td>15</td><td class="num">+1.5%</td><td class="num">0.35</td><td class="num">2.29x</td><td class="num">+4.5%</td></tr>
         <tr><td>50</td><td class="num">+0.2%</td><td class="num">0.07</td><td class="num">1.90x</td><td class="num">+0.5%</td></tr>
+        <tr><td>Benchmark (SPY)</td><td class="num">+8.8%</td><td class="num">0.57</td><td>—</td><td class="num">+28.7%</td></tr>
       </table>
       </div>
       <div class="methodology-note">
