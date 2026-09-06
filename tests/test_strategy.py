@@ -7,8 +7,8 @@ from momentum.scoring import downside_deviation
 from momentum.strategy import MomentumStrategy
 
 
-def _make_feed(prices, name):
-    dates = pd.date_range("2020-01-01", periods=len(prices), freq="B")
+def _make_feed(prices, name, start="2020-01-01"):
+    dates = pd.date_range(start, periods=len(prices), freq="B")
     df = pd.DataFrame(
         {
             "Open": prices,
@@ -55,7 +55,7 @@ class _VolatilityRecordingStrategy(MomentumStrategy):
         super().next()
         d = self.stocks[0]
         if len(d) >= self.p.vol_lookback + 1:
-            self.last_volatility = self.indicators[d._name]["volatility"][0]
+            self.last_volatility = self._volatility(d)
 
 
 class _PositionTrackingStrategy(MomentumStrategy):
@@ -277,6 +277,72 @@ def test_default_sizing_ignores_shares_outstanding():
 
     assert a_size > 0 and b_size > 0
     assert a_size / b_size == pytest.approx(1.0, rel=0.05)
+
+
+class _NamedPositionTrackingStrategy(MomentumStrategy):
+    """Records one named stock's position size after every bar, so a test
+    can check when trading actually started rather than only the end state."""
+
+    def __init__(self):
+        super().__init__()
+        self.tracked_position_history = []
+
+    def next(self):
+        super().next()
+        tracked = next(d for d in self.stocks if d._name == "OLD")
+        self.tracked_position_history.append(self.getposition(tracked).size)
+
+
+def test_late_starting_stock_does_not_freeze_other_stocks():
+    """Regression test for a real bug found via a live 25-year backtest: a
+    per-stock bt.Indicator attached to every stock in __init__ makes
+    backtrader compute the Strategy's global warmup as the max over every
+    indicator's own feed. A stock added late in the backtest - e.g. a real
+    spinoff (Veralto/VLTO, listed 2023-10-04) with enough total history to
+    pass the per-ticker minimum-bars filter, but starting long after the
+    backtest's actual start date - silently froze next() for every OTHER
+    stock too, until that one stock's own indicators became ready (which
+    landed 2024-10-04, VLTO's exact 253rd trading day - confirmed by
+    replaying the real cache). A 3-year backtest never exposed this because
+    every included ticker's own history happened to reach back far enough;
+    a 25-year one did. The fix computes per-stock values on demand in
+    next() instead of via registered indicators, so a late-starting stock
+    is excluded by the min_stock_history guard without blocking anyone else.
+    """
+    n = 1200
+    market = _uptrend(n, daily_return=0.001)
+    old_stock = _uptrend(n, daily_return=0.004, seed=4)
+    # NEW starts 900 bars into the backtest and has 210 bars of its own -
+    # enough to eventually clear every lookback in this test (all <= 200),
+    # just very late, mirroring VLTO's real shape (enough history overall,
+    # but arriving too late for its warmup to matter until near the end).
+    new_stock_start = pd.bdate_range("2020-01-01", periods=n)[900]
+    new_stock = _uptrend(210, daily_return=0.004, seed=5)
+
+    cerebro = bt.Cerebro()
+    cerebro.adddata(_make_feed(market, "MARKET"))
+    cerebro.adddata(_make_feed(old_stock, "OLD"))
+    cerebro.adddata(_make_feed(new_stock, "NEW", start=new_stock_start))
+    cerebro.addstrategy(
+        _NamedPositionTrackingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+    )
+    cerebro.broker.setcash(100_000.0)
+    results = cerebro.run()
+    strategy = results[0]
+
+    # OLD has qualifying history from bar ~200 onward - centuries (in
+    # backtest terms) before NEW's window opens at bar 900. If OLD only
+    # ever traded near the very end (or never), NEW silently starved
+    # everyone else, exactly as it did in the real 25-year run.
+    assert any(size > 0 for size in strategy.tracked_position_history[:400])
 
 
 def test_membership_only_rebalance_does_not_repeat_monthly():

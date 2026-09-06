@@ -1,12 +1,14 @@
 import backtrader as bt
 import numpy as np
 
-from momentum.indicators import DownsideDeviation, FrogInThePan, RollingSkewness
 from momentum.scoring import (
     cap_weighted_inverse_vol_weights,
     combined_score,
+    downside_deviation,
+    fip_score,
     inverse_vol_weights,
     momentum_blend,
+    skewness_score,
 )
 
 
@@ -36,31 +38,24 @@ class MomentumStrategy(bt.Strategy):
             self.market.close, period=self.p.regime_ma_period
         )
 
-        self.indicators = {}
-        for d in self.stocks:
-            self.indicators[d._name] = {
-                "volatility": DownsideDeviation(d, period=self.p.vol_lookback),
-                "skewness": RollingSkewness(d, period=self.p.skewness_lookback),
-                "fip": FrogInThePan(d, period=self.p.fip_lookback),
-                "ts_mom": bt.indicators.SimpleMovingAverage(
-                    d.close, period=self.p.ts_mom_lookback
-                ),
-            }
-
         self.last_rebalanced_stocks = []
         self.last_rebalance_date = None
         self.rebalance_count = 0
         self.total_traded_value = 0.0
 
-        max_overall_lookback = max(
-            self.p.regime_ma_period,
-            self._max_momentum_lookback,
-            self.p.vol_lookback + 1,  # +1: DownsideDeviation needs one extra prior bar to compute returns
-            self.p.skewness_lookback,
-            self.p.fip_lookback,
-            self.p.ts_mom_lookback,
-        )
-        self.addminperiod(max_overall_lookback)
+        # Deliberately NOT attaching per-stock bt.Indicator objects (as an
+        # earlier version did) — backtrader computes a Strategy's warmup
+        # period as the max over every registered indicator, evaluated on
+        # each indicator's own data feed. One recently-listed stock with a
+        # short history (e.g. a spinoff with barely enough total bars to
+        # pass the min-history filter in backtest.py) would then silently
+        # freeze next() for every stock until that single feed's own
+        # indicators became ready — which can be almost the entire backtest
+        # window if the universe spans decades. Per-stock values are instead
+        # computed on demand in next() from raw .get() windows (same pattern
+        # _momentum_score already used safely), gated by the min_stock_history
+        # check below rather than backtrader's global minperiod machinery.
+        self.addminperiod(self.p.regime_ma_period)
 
     def notify_order(self, order):
         if order.status == order.Completed:
@@ -69,6 +64,23 @@ class MomentumStrategy(bt.Strategy):
     def _momentum_score(self, d):
         window = np.array(d.close.get(size=self._max_momentum_lookback + 1))
         return momentum_blend(window, self.p.lookbacks)
+
+    def _fip_score(self, d):
+        window = np.array(d.close.get(size=self.p.fip_lookback + 1))
+        returns = np.diff(window) / window[:-1]
+        return fip_score(returns)
+
+    def _skewness_score(self, d):
+        window = np.array(d.close.get(size=self.p.skewness_lookback))
+        return skewness_score(window)
+
+    def _volatility(self, d):
+        window = np.array(d.close.get(size=self.p.vol_lookback + 1))
+        returns = np.diff(window) / window[:-1]
+        return downside_deviation(returns)
+
+    def _trend_sma(self, d):
+        return float(np.mean(d.close.get(size=self.p.ts_mom_lookback)))
 
     def _is_rebalance_due(self, current_date):
         if self.p.rebalance_frequency is None:
@@ -97,7 +109,9 @@ class MomentumStrategy(bt.Strategy):
 
         min_stock_history = max(
             self.p.regime_ma_period,
-            self.p.fip_lookback,
+            self.p.fip_lookback + 1,
+            self.p.vol_lookback + 1,
+            self.p.skewness_lookback,
             self.p.ts_mom_lookback,
             self._max_momentum_lookback + 1,
         )
@@ -106,15 +120,15 @@ class MomentumStrategy(bt.Strategy):
         for d in self.stocks:
             if len(d) < min_stock_history:
                 continue
-            if d.close[0] <= self.indicators[d._name]["ts_mom"][0]:
+            if d.close[0] <= self._trend_sma(d):
                 continue
 
             mom = self._momentum_score(d)
             if mom <= 0:
                 continue
 
-            fip = self.indicators[d._name]["fip"].fip_score[0]
-            skewness = self.indicators[d._name]["skewness"].skewness[0]
+            fip = self._fip_score(d)
+            skewness = self._skewness_score(d)
             score = combined_score(
                 mom, fip, skewness,
                 self.p.momentum_weight, self.p.fip_weight, self.p.skewness_penalty,
@@ -145,7 +159,7 @@ class MomentumStrategy(bt.Strategy):
         if not new_top:
             return
 
-        vols = {d._name: self.indicators[d._name]["volatility"][0] for d in new_top}
+        vols = {d._name: self._volatility(d) for d in new_top}
         if self.p.sizing_method == "cap_weighted":
             market_caps = {
                 d._name: self.p.shares_outstanding.get(d._name, 0.0) * d.close[0]

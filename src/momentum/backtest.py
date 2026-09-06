@@ -16,14 +16,16 @@ _STARTING_CASH = 100_000.0
 
 
 def _min_required_bars(strategy: StrategyConfig) -> int:
-    """Fewest trading days a data feed needs for every configured indicator.
+    """Fewest trading days a data feed needs to ever be scoreable.
 
-    Must match the largest `addminperiod` declared across `indicators.py`/
-    `strategy.py` (momentum blend, volatility, skewness, FIP, trend SMA,
-    regime SMA) — backtrader precomputes every indicator for the feed's
-    full history before the strategy's own per-bar checks ever run, so a
-    feed shorter than this crashes with an opaque IndexError instead of
-    the clear error/skip below.
+    Must match `MomentumStrategy`'s own `min_stock_history` guard in
+    `next()` (momentum blend, volatility, skewness, FIP, trend SMA, regime
+    SMA). A ticker with fewer bars than this can never pass that guard, so
+    it's skipped here before ever being added to `backtrader` — cheaper
+    than adding a feed that would sit idle for the entire backtest, and
+    (for the benchmark) this is what actually enforces the date-range
+    validation, since MomentumStrategy no longer registers per-stock
+    indicators that would otherwise make backtrader enforce it implicitly.
     """
     return max(
         max(strategy.lookbacks) + 1,
