@@ -36,12 +36,30 @@ def _fake_ohlcv_multiindex(start, periods):
 
 
 def _seed_combined(cache_dir, ticker, df):
+    """Seed the cache the way `data.py` itself shards it, so these tests can't
+    drift from the real layout."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     to_store = df.copy()
     to_store.index.name = "Date"
     to_store = to_store.reset_index()
     to_store.insert(0, "ticker", ticker)
-    to_store.to_parquet(cache_dir / "prices.parquet")
+
+    path = data._shard_path(cache_dir, data._shard_for(ticker))
+    if path.exists():
+        existing = pd.read_parquet(path)
+        existing = existing[existing["ticker"] != ticker]
+        to_store = pd.concat([existing, to_store], ignore_index=True)
+    to_store.to_parquet(path, index=False)
+
+
+def _read_cache(cache_dir):
+    """Every cached row, across all shards."""
+    frames = [
+        pd.read_parquet(p)
+        for shard in range(data._SHARD_COUNT)
+        if (p := data._shard_path(cache_dir, shard)).exists()
+    ]
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 def test_load_prices_downloads_and_caches_when_no_cache(tmp_path, monkeypatch):
@@ -57,7 +75,7 @@ def test_load_prices_downloads_and_caches_when_no_cache(tmp_path, monkeypatch):
 
     assert len(calls) == 1
     assert not result.empty
-    assert (tmp_path / "prices.parquet").exists()
+    assert not _read_cache(tmp_path).empty
 
 
 def test_load_prices_reuses_cache_without_downloading(tmp_path, monkeypatch):
@@ -113,10 +131,7 @@ def test_load_prices_flattens_multiindex_from_download(tmp_path, monkeypatch):
 def test_load_prices_updating_one_ticker_preserves_others(tmp_path, monkeypatch):
     """The combined store holds every ticker; updating one must not drop the rest."""
     _seed_combined(tmp_path, "MSFT", _fake_ohlcv("2022-01-03", periods=10))
-    combined = pd.read_parquet(tmp_path / "prices.parquet")
-    aapl_rows = _fake_ohlcv("2022-01-03", periods=10).reset_index().rename(columns={"index": "Date"})
-    aapl_rows.insert(0, "ticker", "AAPL")
-    pd.concat([combined, aapl_rows], ignore_index=True).to_parquet(tmp_path / "prices.parquet")
+    _seed_combined(tmp_path, "AAPL", _fake_ohlcv("2022-01-03", periods=10))
 
     def _fail_download(ticker, start, end):
         raise AssertionError("should not download when cache covers the range")
@@ -133,7 +148,7 @@ def test_load_prices_updating_one_ticker_preserves_others(tmp_path, monkeypatch)
     monkeypatch.setattr(data, "_download", lambda ticker, start, end: fresh)
     data.load_prices("MSFT", "2022-01-03", "2022-01-24", tmp_path)
 
-    on_disk = pd.read_parquet(tmp_path / "prices.parquet")
+    on_disk = _read_cache(tmp_path)
     assert set(on_disk["ticker"]) == {"MSFT", "AAPL"}
     assert (on_disk["ticker"] == "AAPL").sum() == 10
     assert (on_disk["ticker"] == "MSFT").sum() == 15

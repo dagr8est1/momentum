@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from momentum import data
 from momentum.backtest import run_backtest
 from momentum.config import RunConfig, StrategyConfig
 
@@ -21,7 +22,7 @@ def _synthetic_ohlcv(start, periods, daily_return, seed):
 
 def _seed_cache(cache_dir, ticker, df):
     cache_dir.mkdir(parents=True, exist_ok=True)
-    path = cache_dir / "prices.parquet"
+    path = data._shard_path(cache_dir, data._shard_for(ticker))
 
     to_store = df.copy()
     to_store.index.name = "Date"
@@ -33,7 +34,7 @@ def _seed_cache(cache_dir, ticker, df):
         existing = existing[existing["ticker"] != ticker]
         to_store = pd.concat([existing, to_store], ignore_index=True)
 
-    to_store.to_parquet(path)
+    to_store.to_parquet(path, index=False)
 
 
 def test_run_backtest_end_to_end_with_cached_data(tmp_path, monkeypatch):

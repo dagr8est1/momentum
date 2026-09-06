@@ -1,9 +1,11 @@
+import zlib
 from pathlib import Path
 
 import pandas as pd
 import yfinance as yf
 
-_COMBINED_FILENAME = "prices.parquet"
+_SHARD_FILENAME = "prices_{shard:02d}.parquet"
+_SHARD_COUNT = 4
 _COLUMNS = ["ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
 _SHARES_FILENAME = "shares_outstanding.parquet"
 
@@ -92,18 +94,42 @@ def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFr
     return updated_ticker.loc[start:end]
 
 
-def _combined_path(cache_dir: Path) -> Path:
-    return cache_dir / _COMBINED_FILENAME
+def _shard_for(ticker: str) -> int:
+    """Which shard a ticker's rows live in.
+
+    Uses `zlib.crc32` rather than the builtin `hash()`, whose string hashing
+    is salted per process — a ticker has to land in the same shard on every
+    run and on every machine, or the cache silently splits in two.
+    """
+    return zlib.crc32(ticker.encode()) % _SHARD_COUNT
+
+
+def _shard_path(cache_dir: Path, shard: int) -> Path:
+    return cache_dir / _SHARD_FILENAME.format(shard=shard)
 
 
 def _load_combined(cache_dir: Path) -> pd.DataFrame:
-    path = _combined_path(cache_dir)
-    key = str(path)
+    """All cached price rows, concatenated across shards.
+
+    The store is split across `_SHARD_COUNT` files rather than kept as one:
+    a single combined file grew past GitHub's 100 MB per-file limit once the
+    universe covered every historical S&P 500 constituent back to 1990, and
+    — more importantly — writing one ticker rewrote the entire file, so each
+    commit added a fresh copy of the whole dataset to git history. Sharding
+    means a run that touches a few tickers only rewrites the shards those
+    tickers live in.
+    """
+    key = str(cache_dir)
     if key not in _combined_cache:
-        if path.exists():
-            _combined_cache[key] = pd.read_parquet(path)
-        else:
-            _combined_cache[key] = pd.DataFrame(columns=_COLUMNS)
+        frames = [
+            pd.read_parquet(path)
+            for shard in range(_SHARD_COUNT)
+            if (path := _shard_path(cache_dir, shard)).exists()
+        ]
+        _combined_cache[key] = (
+            pd.concat(frames, ignore_index=True) if frames
+            else pd.DataFrame(columns=_COLUMNS)
+        )
     return _combined_cache[key]
 
 
@@ -124,16 +150,29 @@ def _store_ticker(
     to_store.index.name = "Date"
     to_store = to_store.reset_index()
     to_store.insert(0, "ticker", ticker)
+    to_store = _downcast(to_store)
 
     other_tickers = combined[combined["ticker"] != ticker]
     updated = to_store if other_tickers.empty else pd.concat(
         [other_tickers, to_store], ignore_index=True
     )
+    _combined_cache[str(cache_dir)] = updated
 
-    path = _combined_path(cache_dir)
+    # Only the shard this ticker belongs to needs rewriting.
+    shard = _shard_for(ticker)
+    shard_rows = updated[updated["ticker"].map(_shard_for) == shard]
+    path = _shard_path(cache_dir, shard)
     path.parent.mkdir(parents=True, exist_ok=True)
-    updated.to_parquet(path)
-    _combined_cache[str(path)] = updated
+    shard_rows.to_parquet(path, compression="zstd", index=False)
+
+
+def _downcast(df: pd.DataFrame) -> pd.DataFrame:
+    """Store prices as float32 — the extra float64 precision is well below
+    any price's real significance and costs ~35% of the file size."""
+    for column in ("Open", "High", "Low", "Close", "Volume"):
+        if column in df.columns:
+            df[column] = df[column].astype("float32")
+    return df
 
 
 def _covers_range(df: pd.DataFrame, start: str, end: str) -> bool:
