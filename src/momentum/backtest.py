@@ -8,7 +8,7 @@ import pandas as pd
 from momentum.config import RunConfig, StrategyConfig
 from momentum.data import load_prices, load_shares_outstanding
 from momentum.strategy import MomentumStrategy
-from momentum.universe import resolve_universe
+from momentum.universe import load_point_in_time_membership, resolve_universe
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,40 @@ def _min_required_bars(strategy: StrategyConfig) -> int:
         strategy.ts_mom_lookback,
         strategy.regime_ma_period,
     )
+
+
+def _align_to_calendar(df: pd.DataFrame, calendar: pd.DatetimeIndex) -> pd.DataFrame:
+    """Reindex a ticker's price history onto the benchmark's own trading-day
+    calendar, filling every gap, so every feed added to Cerebro has
+    identical length regardless of when the stock actually started trading.
+
+    Root cause this works around: with each feed's own (differing) row count
+    driving its `len()` in backtrader, a long backtest with hundreds of
+    feeds of wildly different lengths caused the whole strategy's `next()`
+    to silently not fire its real logic until nearly the end of the run —
+    confirmed via direct instrumentation and isolated from several other
+    candidate causes (bad ticker data, `runonce` mode, feed count alone,
+    backtest length alone). Making every feed the same length sidesteps
+    whatever exact internal mechanism caused that, without needing to fully
+    reverse-engineer it.
+
+    Both forward AND backward filled — no NaN survives anywhere in the
+    result. An earlier version left pre-listing days as NaN and used that
+    to detect "not listed yet", which seemed reasonable but silently broke
+    backtrader's own portfolio valuation: `BackBroker._get_value()` sums
+    `position.size * data.close[0]` over EVERY data feed it has ever seen a
+    position object created for (a defaultdict, auto-vivified by any
+    `getposition()` call) — not just currently-held ones. `0 * NaN` is NaN
+    in IEEE 754, so the very first time any not-yet-listed, NaN-padded
+    ticker got touched (e.g. the regime-bearish liquidation loop, which
+    checks every stock regardless of membership), the WHOLE portfolio's
+    value went permanently NaN until every loaded ticker had real data —
+    confirmed via a real 1997-2026 backtest where this made ~26 years of
+    returns silently vanish. Real listing dates are tracked separately (see
+    `run_backtest`'s `listing_positions`) so eligibility no longer needs
+    NaN-detection at all.
+    """
+    return df.reindex(calendar).ffill().bfill()
 
 
 def _annualized_turnover(
@@ -72,6 +106,7 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
 
     tickers = resolve_universe(config.universe)
     added_tickers = []
+    listing_positions = {}
     for ticker in tickers:
         if ticker == config.benchmark:
             continue
@@ -95,6 +130,8 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
                 min_bars,
             )
             continue
+        listing_positions[ticker] = int(benchmark_df.index.searchsorted(df.index.min()))
+        df = _align_to_calendar(df, benchmark_df.index)
         cerebro.adddata(bt.feeds.PandasData(dataname=df, name=ticker))
         added_tickers.append(ticker)
 
@@ -104,17 +141,25 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
             t: load_shares_outstanding(t, cache_dir) for t in added_tickers
         }
 
+    membership = None
+    if config.universe.get("source") == "index:sp500_point_in_time":
+        membership = load_point_in_time_membership(config.universe["constituents_file"])
+
     cerebro.addstrategy(
-        MomentumStrategy, shares_outstanding=shares_outstanding, **asdict(config.strategy)
+        MomentumStrategy,
+        shares_outstanding=shares_outstanding,
+        membership=membership,
+        listing_positions=listing_positions,
+        **asdict(config.strategy),
     )
-    cerebro.addanalyzer(bt.analyzers.TimeReturn, _name="timereturn")
     cerebro.broker.setcash(_STARTING_CASH)
 
     results = cerebro.run()
     strategy = results[0]
 
-    portfolio_returns = pd.Series(strategy.analyzers.timereturn.get_analysis())
-    portfolio_returns.index = pd.to_datetime(portfolio_returns.index)
+    dates, values = zip(*strategy.value_history)
+    portfolio_value = pd.Series(values, index=pd.to_datetime(dates)).sort_index()
+    portfolio_returns = portfolio_value.pct_change().dropna()
 
     benchmark_returns = benchmark_df["Close"].pct_change().dropna()
     benchmark_returns.index = pd.to_datetime(benchmark_returns.index)

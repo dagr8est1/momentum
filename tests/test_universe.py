@@ -1,3 +1,4 @@
+import pandas as pd
 import pytest
 
 from momentum import universe
@@ -37,3 +38,44 @@ def test_resolve_universe_sp500_parses_wikipedia_table(monkeypatch):
 
     assert "MSFT" in result
     assert "BRK-B" in result  # dots normalized to dashes for yfinance compatibility
+
+
+def _write_constituents_file(path, rows):
+    pd.DataFrame(rows, columns=["FactorDate", "Ticker"]).to_parquet(path)
+    return str(path)
+
+
+def test_resolve_universe_point_in_time_returns_superset_of_all_tickers(tmp_path):
+    path = _write_constituents_file(
+        tmp_path / "constituents.parquet",
+        [
+            (pd.Timestamp("2020-01-31"), "AAPL"),
+            (pd.Timestamp("2020-01-31"), "MSFT"),
+            (pd.Timestamp("2020-02-29"), "AAPL"),
+            (pd.Timestamp("2020-02-29"), "GOOG"),  # AAPL stays, MSFT drops, GOOG joins
+        ],
+    )
+
+    result = universe.resolve_universe(
+        {"source": "index:sp500_point_in_time", "constituents_file": path}
+    )
+
+    assert result == ["AAPL", "GOOG", "MSFT"]
+
+
+def test_load_point_in_time_membership_groups_tickers_by_date(tmp_path):
+    path = _write_constituents_file(
+        tmp_path / "constituents.parquet",
+        [
+            (pd.Timestamp("2020-01-31"), "AAPL"),
+            (pd.Timestamp("2020-01-31"), "MSFT"),
+            (pd.Timestamp("2020-02-29"), "AAPL"),
+            (pd.Timestamp("2020-02-29"), "GOOG"),
+        ],
+    )
+
+    membership = universe.load_point_in_time_membership(path)
+
+    assert membership.index.is_monotonic_increasing
+    assert membership.loc[pd.Timestamp("2020-01-31")] == frozenset({"AAPL", "MSFT"})
+    assert membership.loc[pd.Timestamp("2020-02-29")] == frozenset({"AAPL", "GOOG"})

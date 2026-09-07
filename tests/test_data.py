@@ -109,6 +109,29 @@ def test_load_prices_extends_cache_when_range_not_covered(tmp_path, monkeypatch)
     assert len(result) == 15
 
 
+def test_load_prices_remembers_ticker_with_no_data(tmp_path, monkeypatch):
+    calls = []
+
+    def _fake_download(ticker, start, end):
+        calls.append((start, end))
+        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+
+    monkeypatch.setattr(data, "_download", _fake_download)
+
+    first = data.load_prices("DELISTED", "2022-01-03", "2022-01-14", tmp_path)
+    assert first.empty
+    assert len(calls) == 1
+    assert (tmp_path / "no_data_tickers.parquet").exists()
+
+    def _fail_download(ticker, start, end):
+        raise AssertionError("should not re-attempt a ticker already known to have no data")
+
+    monkeypatch.setattr(data, "_download", _fail_download)
+
+    second = data.load_prices("DELISTED", "2023-06-01", "2023-06-30", tmp_path)
+    assert second.empty
+
+
 def test_load_prices_flattens_multiindex_from_download(tmp_path, monkeypatch):
     """Verify _download flattens MultiIndex columns returned by yfinance."""
 

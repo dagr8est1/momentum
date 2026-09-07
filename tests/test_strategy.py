@@ -1,3 +1,5 @@
+import math
+
 import backtrader as bt
 import numpy as np
 import pandas as pd
@@ -345,6 +347,153 @@ def test_late_starting_stock_does_not_freeze_other_stocks():
     assert any(size > 0 for size in strategy.tracked_position_history[:400])
 
 
+def test_calendar_aligned_late_starting_stock_does_not_freeze_other_stocks():
+    """Regression test for a second, distinct freeze bug found via a real
+    1997-2026 backtest, after the per-stock-indicator freeze above was
+    already fixed. With ~700+ feeds of widely varying real lengths (some
+    stocks starting decades apart), `next()`'s real trading logic silently
+    didn't fire until nearly the end of the 29.5-year run - confirmed by
+    direct instrumentation, and isolated (via several ruled-out hypotheses:
+    bad ticker data, `runonce` mode, feed count alone, backtest length
+    alone) to something about backtrader's handling of many feeds whose OWN
+    `len()` differs drastically. `backtest.py`'s `_align_to_calendar`
+    reindexes every ticker onto the benchmark's own calendar before adding
+    it as a feed, so every feed has identical length regardless of when the
+    stock actually started trading. This test reproduces that exact shape -
+    not the shorter/differently-lengthed feeds the test above uses - and
+    checks the freeze is gone.
+
+    Pre-listing days are backward-filled with the stock's own first real
+    price (not left NaN - an earlier version did that, but a NaN close on a
+    position backtrader has ever created an entry for, even at zero size,
+    poisons its own broker.getvalue() for the whole portfolio via a
+    `0 * NaN`). Real listing position is passed in separately via
+    `listing_positions` instead, matching what `backtest.py` does.
+    """
+    from momentum.backtest import _align_to_calendar
+
+    n = 1200
+    market_prices = _uptrend(n, daily_return=0.001)
+    old_prices = _uptrend(n, daily_return=0.004, seed=4)
+    new_real_prices = _uptrend(300, daily_return=0.004, seed=5)
+
+    calendar = pd.bdate_range("2020-01-01", periods=n)
+    market_df = pd.DataFrame(
+        {"Open": market_prices, "High": market_prices, "Low": market_prices,
+         "Close": market_prices, "Volume": [1_000] * n},
+        index=calendar,
+    )
+    old_df = pd.DataFrame(
+        {"Open": old_prices, "High": old_prices, "Low": old_prices,
+         "Close": old_prices, "Volume": [1_000] * n},
+        index=calendar,
+    )
+    new_raw_df = pd.DataFrame(
+        {"Open": new_real_prices, "High": new_real_prices, "Low": new_real_prices,
+         "Close": new_real_prices, "Volume": [1_000] * 300},
+        index=calendar[900:],
+    )
+    new_df = _align_to_calendar(new_raw_df, calendar)
+    assert len(new_df) == len(market_df) == len(old_df)  # identical length, unlike the test above
+    assert not new_df["Close"].isna().any()  # no NaN anywhere - backward-filled instead
+    assert (new_df["Close"].iloc[:900] == new_real_prices[0]).all()  # pre-listing = first real price
+
+    cerebro = bt.Cerebro()
+    cerebro.adddata(bt.feeds.PandasData(dataname=market_df, name="MARKET"))
+    cerebro.adddata(bt.feeds.PandasData(dataname=old_df, name="OLD"))
+    cerebro.adddata(bt.feeds.PandasData(dataname=new_df, name="NEW"))
+    cerebro.addstrategy(
+        _NamedPositionTrackingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+        listing_positions={"NEW": 900},
+    )
+    cerebro.broker.setcash(100_000.0)
+    results = cerebro.run()
+    strategy = results[0]
+
+    assert any(size > 0 for size in strategy.tracked_position_history[:400])
+
+
+def test_bearish_regime_does_not_poison_value_with_unlisted_stock():
+    """Regression test for a real bug found via a 1997-2026 backtest:
+    backtrader's own BackBroker._get_value() sums `position.size *
+    data.close[0]` over EVERY data feed it has ever created a position
+    entry for (a defaultdict, auto-vivified by any getposition() call) -
+    not just currently-held ones. `0 * NaN` is NaN in IEEE 754, so the
+    regime-bearish liquidation loop (which calls getposition() on every
+    stock regardless of eligibility) permanently NaN'd the whole
+    portfolio's value the first time it ran while any not-yet-listed,
+    NaN-padded stock existed among the loaded feeds - silently vanishing
+    ~26 years of returns in the real backtest. Fixed by backward-filling
+    pre-listing days (see _align_to_calendar) so no close price is ever
+    NaN; eligibility now tracked separately via listing_positions.
+    """
+    from momentum.backtest import _align_to_calendar
+
+    n_up = 260
+    n_crash = 200
+    n = n_up + n_crash - 1
+    uptrend = _uptrend(n_up, start=200.0, daily_return=0.004, seed=11)
+    crash = list(np.linspace(uptrend[-1], 20.0, n_crash))[1:]
+    market_prices = uptrend + crash
+    old_prices = _uptrend(n, start=100.0, daily_return=0.004, seed=12)
+    # NEW hasn't listed yet by the time the crash happens (starts at bar
+    # n - 10, i.e. only 10 real bars exist by the end of this test).
+    new_real_prices = _uptrend(10, daily_return=0.003, seed=5)
+
+    calendar = pd.bdate_range("2020-01-01", periods=n)
+    market_df = pd.DataFrame(
+        {"Open": market_prices, "High": market_prices, "Low": market_prices,
+         "Close": market_prices, "Volume": [1_000] * n},
+        index=calendar,
+    )
+    old_df = pd.DataFrame(
+        {"Open": old_prices, "High": old_prices, "Low": old_prices,
+         "Close": old_prices, "Volume": [1_000] * n},
+        index=calendar,
+    )
+    new_raw_df = pd.DataFrame(
+        {"Open": new_real_prices, "High": new_real_prices, "Low": new_real_prices,
+         "Close": new_real_prices, "Volume": [1_000] * 10},
+        index=calendar[-10:],
+    )
+    new_df = _align_to_calendar(new_raw_df, calendar)
+
+    cerebro = bt.Cerebro()
+    cerebro.adddata(bt.feeds.PandasData(dataname=market_df, name="MARKET"))
+    cerebro.adddata(bt.feeds.PandasData(dataname=old_df, name="OLD"))
+    cerebro.adddata(bt.feeds.PandasData(dataname=new_df, name="NEW"))
+    cerebro.addstrategy(
+        _PositionTrackingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+        listing_positions={"NEW": n - 10},
+    )
+    cerebro.broker.setcash(100_000.0)
+    results = cerebro.run()
+    strategy = results[0]
+
+    # The crash triggers regime-bearish liquidation while NEW is still
+    # unlisted (NaN-free only because of the backward-fill fix) - this is
+    # exactly the moment the real bug corrupted portfolio value forever.
+    assert not math.isnan(strategy.broker.getvalue())
+    assert max(strategy.position_history) > 0  # OLD was actually bought at some point
+    assert strategy.position_history[-1] == 0  # and liquidated by the crash
+
+
 def test_membership_only_rebalance_does_not_repeat_monthly():
     n = 400
     market = _uptrend(n, daily_return=0.001)
@@ -364,3 +513,35 @@ def test_membership_only_rebalance_does_not_repeat_monthly():
     )
 
     assert strategy.rebalance_count == 1
+
+
+def test_point_in_time_membership_excludes_non_member_stocks():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    stocks = {
+        "WINNER": _uptrend(n, daily_return=0.006, seed=2),  # best momentum, never a member
+        "MEMBER": _uptrend(n, daily_return=0.003, seed=3),  # weaker momentum, the only member
+    }
+    membership = pd.Series(
+        [frozenset({"MEMBER"})],
+        index=[pd.Timestamp("2020-01-01")],
+    )
+
+    strategy = _run(
+        market,
+        stocks,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+        membership=membership,
+    )
+
+    winner_data = next(d for d in strategy.stocks if d._name == "WINNER")
+    member_data = next(d for d in strategy.stocks if d._name == "MEMBER")
+    assert strategy.getposition(winner_data).size == 0
+    assert strategy.getposition(member_data).size > 0

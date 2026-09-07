@@ -1,10 +1,11 @@
 benchmark: SPY
-start_date: "2022-01-01"
-end_date: "2024-12-31"
+start_date: "1997-01-01"
+end_date: "2026-06-30"
 cache_dir: cache_data
 
 universe:
-  source: index:sp500
+  source: index:sp500_point_in_time
+  constituents_file: cache_data/sp500_constituents_monthly.parquet
 
 strategy:
   lookbacks: [60, 120, 252]
@@ -18,4 +19,4 @@ strategy:
   fip_weight: 0.5
   skewness_penalty: 0.5
   rebalance_frequency: monthly
-  sizing_method: cap_weighted
+  sizing_method: inverse_vol

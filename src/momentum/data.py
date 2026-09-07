@@ -8,11 +8,13 @@ _SHARD_FILENAME = "prices_{shard:02d}.parquet"
 _SHARD_COUNT = 4
 _COLUMNS = ["ticker", "Date", "Open", "High", "Low", "Close", "Volume"]
 _SHARES_FILENAME = "shares_outstanding.parquet"
+_NO_DATA_FILENAME = "no_data_tickers.parquet"
 
 # Combined store is loaded once per cache_dir and reused for every ticker in
 # a run, instead of re-reading the (potentially large) file on every call.
 _combined_cache: dict[str, pd.DataFrame] = {}
 _shares_cache: dict[str, pd.DataFrame] = {}
+_no_data_cache: dict[str, set[str]] = {}
 
 
 def load_shares_outstanding(ticker: str, cache_dir: Path) -> float:
@@ -80,18 +82,49 @@ def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFr
     if cached is not None and _covers_range(cached, start, end):
         return cached.loc[start:end]
 
+    empty_result = pd.DataFrame(
+        columns=["Open", "High", "Low", "Close", "Volume"],
+        index=pd.DatetimeIndex([], name="Date"),
+    )
+
+    known_empty = _load_no_data(cache_dir)
+    if cached is None and ticker in known_empty:
+        # A ticker permanently unavailable from yfinance (delisted decades
+        # ago, typo, never listed) stays unavailable regardless of the date
+        # range requested — skip the network round-trip entirely instead of
+        # re-attempting it on every single run.
+        return empty_result
+
     fresh = _download(ticker, start, end)
     updated_ticker = fresh if cached is None else _merge(cached, fresh)
 
     if not updated_ticker.empty:
-        # A ticker that download returns nothing for (delisted, typo, not yet
-        # listed) is left out of the store entirely rather than persisted as
-        # a zero-row entry — that would rewrite the whole (git-tracked) file
-        # on every single run without ever learning anything new. The cost:
-        # such a ticker is re-attempted on every run instead of being
-        # remembered as "known empty".
         _store_ticker(cache_dir, combined, ticker, updated_ticker)
+    elif cached is None:
+        _store_no_data(cache_dir, known_empty, ticker)
     return updated_ticker.loc[start:end]
+
+
+def _no_data_path(cache_dir: Path) -> Path:
+    return cache_dir / _NO_DATA_FILENAME
+
+
+def _load_no_data(cache_dir: Path) -> set[str]:
+    path = _no_data_path(cache_dir)
+    key = str(path)
+    if key not in _no_data_cache:
+        if path.exists():
+            _no_data_cache[key] = set(pd.read_parquet(path)["ticker"])
+        else:
+            _no_data_cache[key] = set()
+    return _no_data_cache[key]
+
+
+def _store_no_data(cache_dir: Path, known_empty: set[str], ticker: str) -> None:
+    known_empty.add(ticker)
+    path = _no_data_path(cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"ticker": sorted(known_empty)}).to_parquet(path)
 
 
 def _shard_for(ticker: str) -> int:

@@ -8,7 +8,7 @@ universe:
 
 strategy:
   lookbacks: [60, 120, 252]
-  top_n: 5
+  top_n: 10
   vol_lookback: 126
   skewness_lookback: 90
   fip_lookback: 252

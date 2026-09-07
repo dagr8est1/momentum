@@ -1,5 +1,6 @@
 import backtrader as bt
 import numpy as np
+import pandas as pd
 
 from momentum.scoring import (
     cap_weighted_inverse_vol_weights,
@@ -27,6 +28,8 @@ class MomentumStrategy(bt.Strategy):
         rebalance_frequency="monthly",
         sizing_method="inverse_vol",
         shares_outstanding={},
+        membership=None,
+        listing_positions={},
     )
 
     def __init__(self):
@@ -42,6 +45,7 @@ class MomentumStrategy(bt.Strategy):
         self.last_rebalance_date = None
         self.rebalance_count = 0
         self.total_traded_value = 0.0
+        self.value_history = []
 
         # Deliberately NOT attaching per-stock bt.Indicator objects (as an
         # earlier version did) — backtrader computes a Strategy's warmup
@@ -82,6 +86,38 @@ class MomentumStrategy(bt.Strategy):
     def _trend_sma(self, d):
         return float(np.mean(d.close.get(size=self.p.ts_mom_lookback)))
 
+    def _current_members(self, current_date):
+        """Tickers eligible to be traded as of `current_date`, or None if no
+        point-in-time membership data was supplied (i.e. every loaded feed is
+        eligible, as with a static/current-list universe)."""
+        if self.p.membership is None:
+            return None
+        ts = pd.Timestamp(current_date)
+        pos = self.p.membership.index.searchsorted(ts, side="right") - 1
+        if pos < 0:
+            return frozenset()
+        return self.p.membership.iloc[pos]
+
+    def _has_full_history(self, d, lookback):
+        """Whether `d` has `lookback` bars of REAL (non-placeholder) history.
+
+        Data feeds are pre-aligned onto the benchmark's own trading-day
+        calendar before being added to Cerebro (see `backtest.py`), so every
+        feed reports the same `len(d)` from day one regardless of when the
+        stock actually started trading — `len(d)` alone can no longer detect
+        "not listed yet". Pre-listing days are backward-filled with the
+        stock's own first real price rather than left NaN (a NaN close on a
+        never-held position was found to poison backtrader's own
+        broker.getvalue() for the whole portfolio via a `0 * NaN` in its
+        valuation loop — see `_align_to_calendar`'s docstring), so real
+        listing position is tracked separately via `listing_positions`
+        instead. Defaults to 0 when not provided (e.g. in tests that build
+        short feeds directly, without this pre-alignment), reducing to a
+        plain `len(d) >= lookback` check.
+        """
+        listing_position = self.p.listing_positions.get(d._name, 0)
+        return (len(d) - listing_position) >= lookback
+
     def _is_rebalance_due(self, current_date):
         if self.p.rebalance_frequency is None:
             return False
@@ -96,6 +132,13 @@ class MomentumStrategy(bt.Strategy):
 
     def next(self):
         current_date = self.datetime.date()
+        # Recorded unconditionally, before any early return below, so this
+        # is the source of truth for portfolio returns instead of
+        # bt.analyzers.TimeReturn (which computes from the same
+        # broker.getvalue(), so it isn't actually a more independent
+        # source — but tracking it ourselves made the getvalue()-poisoning
+        # bug below visible and debuggable).
+        self.value_history.append((current_date, self.broker.getvalue()))
 
         if len(self.market) < self.p.regime_ma_period:
             return
@@ -116,9 +159,13 @@ class MomentumStrategy(bt.Strategy):
             self._max_momentum_lookback + 1,
         )
 
+        members = self._current_members(current_date)
+
         scores = []
         for d in self.stocks:
-            if len(d) < min_stock_history:
+            if members is not None and d._name not in members:
+                continue
+            if not self._has_full_history(d, min_stock_history):
                 continue
             if d.close[0] <= self._trend_sma(d):
                 continue
