@@ -1,0 +1,22 @@
+benchmark: SPY
+start_date: "1997-01-01"
+end_date: "2026-06-30"
+cache_dir: cache_data
+
+universe:
+  source: index:sp500_point_in_time
+  constituents_file: cache_data/sp500_constituents_monthly.parquet
+
+strategy:
+  lookbacks: [60, 120, 252]
+  top_n: 10
+  vol_lookback: 126
+  skewness_lookback: 90
+  fip_lookback: 252
+  ts_mom_lookback: 200
+  regime_ma_period: 200
+  momentum_weight: 0.5
+  fip_weight: 0.5
+  skewness_penalty: 0.5
+  rebalance_frequency: quarterly
+  sizing_method: inverse_vol

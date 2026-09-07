@@ -545,3 +545,27 @@ def test_point_in_time_membership_excludes_non_member_stocks():
     member_data = next(d for d in strategy.stocks if d._name == "MEMBER")
     assert strategy.getposition(winner_data).size == 0
     assert strategy.getposition(member_data).size > 0
+
+
+def test_quarterly_rebalance_fires_less_often_than_monthly():
+    """Same membership-stable scenario, only the calendar trigger differs.
+    Quarterly buckets three months per rebalance instead of one, so it must
+    fire strictly less often over the same window."""
+    n = 400
+    market = _uptrend(n, daily_return=0.001)
+    stocks = {"UP": _uptrend(n, daily_return=0.004, seed=3)}
+
+    kwargs = dict(
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+    )
+    monthly = _run(market, stocks, rebalance_frequency="monthly", **kwargs)
+    quarterly = _run(market, stocks, rebalance_frequency="quarterly", **kwargs)
+
+    assert quarterly.rebalance_count < monthly.rebalance_count
+    assert quarterly.rebalance_count >= 1  # still fires at least the initial rebalance

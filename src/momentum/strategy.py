@@ -128,6 +128,11 @@ class MomentumStrategy(bt.Strategy):
                 self.last_rebalance_date.year,
                 self.last_rebalance_date.month,
             )
+        if self.p.rebalance_frequency == "quarterly":
+            return (current_date.year, (current_date.month - 1) // 3) != (
+                self.last_rebalance_date.year,
+                (self.last_rebalance_date.month - 1) // 3,
+            )
         raise ValueError(f"Unsupported rebalance_frequency: {self.p.rebalance_frequency}")
 
     def next(self):

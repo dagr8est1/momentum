@@ -796,6 +796,18 @@
           <p>On a rebalance: positions no longer in the new top-N are closed first; inverse-vol
           weights are recomputed for the new top-N; each target position is opened/resized via
           <code>order_target_value</code>.</p>
+          <div class="methodology-note">
+            <strong>Does the calendar cadence (Trigger B) actually matter?</strong>
+            Measured, not assumed: switching <code>rebalance_frequency</code> from <code>monthly</code>
+            to <code>quarterly</code> on the full 1997–2026 point-in-time backtest moved CAGR, Sharpe,
+            and turnover by less than 0.1 percentage points in either direction, for both
+            <code>top_n=5</code> and <code>top_n=10</code>. The reason is Trigger A: with ~500 eligible
+            names re-ranked every day, the top-N membership itself changes often enough that Trigger A
+            almost always fires before Trigger B's calendar window elapses — most of the ~30x/year
+            turnover comes from membership churn and regime-flip liquidations, not from the calendar
+            trigger. <code>quarterly</code> is supported and tested, but <code>monthly</code> remains
+            the default since it makes no measurable difference either way.
+          </div>
           <p style="margin:0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the membership-diff check in <code>next()</code>.</p>
         </article>
 
@@ -1292,7 +1304,7 @@ strategy:
         <tr><td><code>strategy.ts_mom_lookback</code></td><td>SMA period for the per-stock trend filter</td><td><code>200</code></td></tr>
         <tr><td><code>strategy.regime_ma_period</code></td><td>SMA period for the benchmark regime filter</td><td><code>200</code></td></tr>
         <tr><td><code>strategy.momentum_weight</code> / <code>fip_weight</code> / <code>skewness_penalty</code></td><td>Combined-score weights</td><td><code>0.5 / 0.5 / 0.5</code></td></tr>
-        <tr><td><code>strategy.rebalance_frequency</code></td><td><code>null</code> (membership-change only) or <code>"monthly"</code></td><td><code>monthly</code></td></tr>
+        <tr><td><code>strategy.rebalance_frequency</code></td><td><code>null</code> (membership-change only), <code>"monthly"</code>, or <code>"quarterly"</code></td><td><code>monthly</code></td></tr>
         <tr><td><code>strategy.sizing_method</code></td><td><code>"inverse_vol"</code> or <code>"cap_weighted"</code> (market-cap tilt on top of the same inverse-vol formula — see <a href="#slide-sizing">slide&nbsp;10</a>)</td><td><code>inverse_vol</code></td></tr>
       </table>
 

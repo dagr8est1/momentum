@@ -45,6 +45,17 @@ strategy:
   rebalance_frequency: weekly
 """
 
+QUARTERLY_REBALANCE_YAML = """
+benchmark: SPY
+start_date: "2022-01-01"
+end_date: "2024-12-31"
+universe:
+  source: static
+  tickers: [MSFT]
+strategy:
+  rebalance_frequency: quarterly
+"""
+
 INVALID_SIZING_METHOD_YAML = """
 benchmark: SPY
 start_date: "2022-01-01"
@@ -106,6 +117,15 @@ def test_load_config_raises_on_invalid_rebalance_frequency(tmp_path):
 
     with pytest.raises(ValueError, match="rebalance_frequency"):
         load_config(config_path)
+
+
+def test_load_config_accepts_quarterly_rebalance_frequency(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(QUARTERLY_REBALANCE_YAML)
+
+    config = load_config(config_path)
+
+    assert config.strategy.rebalance_frequency == "quarterly"
 
 
 def test_load_config_raises_on_invalid_sizing_method(tmp_path):

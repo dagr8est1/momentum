@@ -47,10 +47,10 @@ def load_config(path: str | Path) -> RunConfig:
     except TypeError as exc:
         raise ValueError(f"Invalid strategy config: {exc}") from exc
 
-    if strategy.rebalance_frequency not in (None, "monthly"):
+    if strategy.rebalance_frequency not in (None, "monthly", "quarterly"):
         raise ValueError(
             f"Invalid rebalance_frequency: {strategy.rebalance_frequency!r} "
-            "(must be None or 'monthly')"
+            "(must be None, 'monthly', or 'quarterly')"
         )
 
     if strategy.sizing_method not in ("inverse_vol", "cap_weighted"):
