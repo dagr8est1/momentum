@@ -494,7 +494,11 @@ def test_bearish_regime_does_not_poison_value_with_unlisted_stock():
     assert strategy.position_history[-1] == 0  # and liquidated by the crash
 
 
-def test_membership_only_rebalance_does_not_repeat_monthly():
+def test_null_frequency_rebalances_only_once():
+    """rebalance_frequency=None has no periodic trigger, and (since the
+    membership-change trigger was removed) no other trigger either -- so a
+    stable single-candidate scenario should enter its one position and then
+    never rebalance again."""
     n = 400
     market = _uptrend(n, daily_return=0.001)
     stocks = {"UP": _uptrend(n, daily_return=0.004, seed=3)}
@@ -513,6 +517,57 @@ def test_membership_only_rebalance_does_not_repeat_monthly():
     )
 
     assert strategy.rebalance_count == 1
+
+
+def test_membership_exit_does_not_force_rebalance_before_calendar_date():
+    """Core behavior of the calendar-only trigger: a held stock dropping out
+    of the point-in-time membership mid-month must NOT be liquidated until
+    the next scheduled monthly rebalance -- unlike the old dual-trigger
+    design, where any membership change fired a rebalance immediately."""
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    stocks = {"ONLY": _uptrend(n, daily_return=0.004, seed=4)}
+    calendar = pd.bdate_range("2020-01-01", periods=n)
+
+    # ONLY is the sole member from day 0 until day 220 (2020-11-04), when it
+    # drops out of the index -- a date deliberately NOT aligned with any
+    # monthly rebalance boundary (those fall on 2020-10-07, 2020-11-02, and
+    # 2020-12-01 for this scenario).
+    membership = pd.Series(
+        [frozenset({"ONLY"}), frozenset()],
+        index=[calendar[0], calendar[220]],
+    )
+
+    strategy = _run(
+        market,
+        stocks,
+        strategy_cls=_PositionTrackingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=[60, 120, 200],
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency="monthly",
+        membership=membership,
+    )
+
+    # Position opened during the initial (October) rebalance. position_history
+    # is indexed from backtrader's first next() call, which (via
+    # addminperiod(regime_ma_period)) is bar 199 of the feed, not bar 0 -- so
+    # feed-calendar index k maps to position_history[k - 199].
+    assert strategy.position_history[10] > 0
+    # Membership drops at day 220, but the next monthly boundary isn't until
+    # December 1st (day 239) -- the position must still be held in between.
+    assert strategy.position_history[220 - 199] > 0
+    # By the end (well past the December rebalance + one bar to fill the
+    # close), the now-ineligible position has been liquidated.
+    assert strategy.position_history[-1] == 0
+    # Exactly three rebalances: initial entry (Oct), monthly resize (Nov,
+    # membership hadn't dropped yet), and the exit (Dec) -- the membership
+    # drop itself did not create a fourth, out-of-band event.
+    assert strategy.rebalance_count == 3
 
 
 def test_point_in_time_membership_excludes_non_member_stocks():
