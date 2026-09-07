@@ -41,7 +41,6 @@ class MomentumStrategy(bt.Strategy):
             self.market.close, period=self.p.regime_ma_period
         )
 
-        self.last_rebalanced_stocks = []
         self.last_rebalance_date = None
         self.rebalance_count = 0
         self.total_traded_value = 0.0
@@ -119,10 +118,14 @@ class MomentumStrategy(bt.Strategy):
         return (len(d) - listing_position) >= lookback
 
     def _is_rebalance_due(self, current_date):
-        if self.p.rebalance_frequency is None:
-            return False
+        # The very first rebalance always fires, regardless of frequency --
+        # otherwise a portfolio never enters a single position under
+        # rebalance_frequency=None, now that membership changes no longer
+        # trigger a rebalance on their own (see next()).
         if self.last_rebalance_date is None:
             return True
+        if self.p.rebalance_frequency is None:
+            return False
         if self.p.rebalance_frequency == "monthly":
             return (current_date.year, current_date.month) != (
                 self.last_rebalance_date.year,
@@ -152,7 +155,9 @@ class MomentumStrategy(bt.Strategy):
             for d in self.stocks:
                 if self.getposition(d).size:
                     self.close(data=d)
-            self.last_rebalanced_stocks = []
+            return
+
+        if not self._is_rebalance_due(current_date):
             return
 
         min_stock_history = max(
@@ -190,20 +195,21 @@ class MomentumStrategy(bt.Strategy):
         scores.sort(key=lambda x: x["score"], reverse=True)
         new_top = [x["data"] for x in scores[: self.p.top_n]]
 
-        membership_changed = sorted(d._name for d in new_top) != sorted(
-            d._name for d in self.last_rebalanced_stocks
-        )
-        if not membership_changed and not self._is_rebalance_due(current_date):
-            return
-
-        self.last_rebalanced_stocks = new_top
-        self.last_rebalance_date = current_date
-        self.rebalance_count += 1
-
         current_positions = [
             d for d, pos in self.broker.positions.items()
             if pos.size != 0 and d in self.stocks
         ]
+        if not new_top and not current_positions:
+            # Nothing eligible and nothing held -- a no-op, not a real
+            # rebalance. Leaving last_rebalance_date untouched means
+            # rebalance_frequency=None keeps checking every day until a
+            # candidate actually appears, instead of permanently consuming
+            # its one allowed rebalance on an empty day.
+            return
+
+        self.last_rebalance_date = current_date
+        self.rebalance_count += 1
+
         for d in current_positions:
             if d not in new_top:
                 self.close(data=d)

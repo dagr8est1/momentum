@@ -348,6 +348,7 @@
     <h2>Contents</h2>
     <a href="#tldr">The short version</a>
     <a href="#overview">1 · How It Works</a>
+    <a class="sub" href="#thesis">Investment thesis</a>
     <a class="sub" href="#slide-idea">The core idea</a>
     <a class="sub" href="#slide-universe">The universe</a>
     <a class="sub" href="#slide-regime">Regime filter</a>
@@ -376,10 +377,10 @@
     <a class="sub" href="#running-sp500">Running with S&amp;P 500</a>
     <a class="sub" href="#config-ref">Config reference</a>
     <a class="sub" href="#testing">Testing</a>
-    <a href="#interview">4 · Design Notes</a>
+    <a href="#interview">4 · Design &amp; Defense</a>
     <a class="sub" href="#decisions">Design decisions</a>
     <a class="sub" href="#gotchas">Gotchas worth knowing</a>
-    <a class="sub" href="#qa">Likely questions</a>
+    <a class="sub" href="#qa">Q&amp;A / interview prep</a>
   </nav>
 
   <main>
@@ -421,10 +422,17 @@
           <p style="margin:0 0 10px"><strong>The biggest caveat.</strong> Turnover runs ~30x a year
           and <em>no trading costs are modeled</em>. That single omission could plausibly erase the
           edge; see <a href="#results-limits">Limitations</a> before quoting any number here.</p>
+          <p style="margin:0 0 10px"><strong>The most useful thing measurement found.</strong> The
+          rule that fired a rebalance the moment the ranking changed — which sounds obviously
+          correct — was cutting positions after a median of 5 days, before momentum could pay out.
+          Trading on a monthly schedule instead raises CAGR 2.1pp and cuts turnover 3x
+          (<a href="#slide-rebalance">slide&nbsp;11</a>).</p>
           <p style="margin:0"><strong>Where to go next.</strong>
+          <a href="#thesis">The thesis</a> is why momentum should work at all;
           <a href="#overview">§1</a> is the full decision procedure, formula by formula;
           <a href="#results">§2</a> is the evidence, including which market conditions actually
-          favour it; <a href="#architecture">§3</a> is the code and how to run it.</p>
+          favour it; <a href="#architecture">§3</a> is the code; <a href="#qa">§4's Q&amp;A</a>
+          works through the hard questions, including the ones this project answers badly.</p>
         </div>
       </div>
     </div>
@@ -462,6 +470,74 @@
         Read top to bottom and you have the complete decision procedure the backtest executes
         on every single trading day.
       </p>
+
+      <div class="card" id="thesis" style="border-left:3px solid var(--accent)">
+        <h4 style="margin-top:0">The investment thesis — why buying recent winners should work at all</h4>
+        <p style="margin:0 0 12px; font-size:13.8px">
+          Everything below this point is mechanics. This is the part that has to be true first,
+          because a momentum strategy is a bet on a specific, well-documented, and genuinely
+          strange claim: <strong>that past price movement predicts future price movement</strong>,
+          which a strictly efficient market should not allow.
+        </p>
+        <div class="grid-2" style="font-size:13.5px; align-items:start">
+          <div>
+            <p style="margin:0 0 6px"><strong>1. The empirical claim</strong></p>
+            <p style="margin:0 0 12px">Stocks that outperformed over the past 3–12 months keep
+            outperforming, on average, over the next 3–12 months. Jegadeesh &amp; Titman documented
+            this in 1993 on US equities; it has since been found across decades, in most developed
+            and emerging equity markets, and in bonds, currencies, and commodities. It is one of the
+            few anomalies that survived being published — which is itself the most interesting fact
+            about it.</p>
+
+            <p style="margin:0 0 6px"><strong>2. Why it might exist — behavioral</strong></p>
+            <ul style="margin:0 0 12px; padding-left:18px">
+              <li><strong>Underreaction to news.</strong> Information diffuses gradually. Prices
+              adjust to genuinely new information over weeks, not instantly, so the first part of a
+              move predicts the rest. This is the specific effect the
+              <a href="#slide-fip">FIP score</a> is designed to isolate.</li>
+              <li><strong>The disposition effect.</strong> Investors sell winners too early and hold
+              losers too long, creating artificial selling pressure on rising stocks that delays
+              their full re-pricing.</li>
+              <li><strong>Herding and delayed overreaction.</strong> Later buyers chase established
+              trends, extending them past fair value — which is also why momentum eventually
+              reverses, and why it can reverse violently.</li>
+            </ul>
+          </div>
+          <div>
+            <p style="margin:0 0 6px"><strong>3. Why it might exist — risk-based</strong></p>
+            <p style="margin:0 0 12px">The competing explanation is that momentum isn't a free lunch
+            at all: it's compensation for bearing a real, nasty risk. Momentum portfolios are
+            implicitly long high-beta, recently-rewarded, crowded positions, which is exactly the
+            exposure that gets destroyed in a sharp regime reversal. On this reading the returns are
+            <em>earned</em>, not mispriced — you are paid for holding something that occasionally
+            crashes hard. Both explanations predict the same average return; they differ on whether
+            it can be diversified away. It cannot.</p>
+
+            <p style="margin:0 0 6px"><strong>4. Why it hasn't been arbitraged away</strong></p>
+            <p style="margin:0 0 12px">Momentum requires continuous, high turnover to maintain, so
+            trading costs eat a large share of the paper return — which is precisely why this
+            document treats unmodeled transaction costs as its
+            <a href="#results-limits">most serious caveat</a>. It also demands holding whatever is
+            currently working, including at moments that feel obviously wrong, and it suffers
+            multi-year stretches of underperformance that most capital will not sit through. The
+            edge is guarded by cost and by discomfort, not by secrecy.</p>
+          </div>
+        </div>
+        <div class="callout gotcha" style="margin:4px 0 0">
+          <strong>5. The known failure mode this design is built around: momentum crashes</strong>
+          Momentum's characteristic disaster is not a slow bleed — it is a sudden, violent reversal
+          at a market bottom, when beaten-down names rip upward and the recent winners the strategy
+          holds are precisely the wrong book to own. This happened in 2009 and again in 2020.
+          It is the reason this implementation is not a pure momentum strategy: the
+          <a href="#slide-regime">market regime filter</a> exists specifically to force the
+          portfolio to cash before a crash-prone reversal can happen, accepting a permanent, known
+          cost — it will always re-enter late and give up most of a V-shaped recovery. That trade is
+          visible, quantified, and unflattering in the
+          <a href="#results-regimes">market-condition breakdown</a>: the strategy's entire edge is
+          earned in downturns and handed back in sharp recoveries. Understanding this one trade-off
+          is understanding the whole strategy.
+        </div>
+      </div>
 
       <div class="pipeline-strip">
         <a href="#slide-idea">Core idea</a><span class="arrow">→</span>
@@ -556,11 +632,14 @@
             keeps the strategy out of prolonged drawdowns instead of fighting them stock-by-stock.
           </p>
           <div class="methodology-note">
-            <strong>What resets on a flip to cash</strong>
-            <code>last_rebalanced_stocks</code> is cleared to an empty list. So the moment the
-            regime turns bullish again, the new top-N selection is, by definition, a full
-            "membership change" from empty — forcing an immediate rebalance into the new book
-            rather than waiting for the monthly trigger.
+            <strong>The filter is deliberately slow, and that is the whole trade</strong>
+            A 200-day average cannot identify a top or a bottom — it can only confirm one well
+            after the fact. So this filter is guaranteed to exit partway <em>into</em> a decline and
+            re-enter partway <em>into</em> a recovery, every single time. That lag is not a flaw to
+            be tuned away; it is the price paid for the protection, and it is exactly why the
+            strategy loses far less than the benchmark in the 2008 and 2020 crashes while badly
+            trailing it in the recoveries that follow (<a href="#results-regimes">§2</a>). A faster
+            filter would cut the lag and buy more whipsaw; a slower one, the reverse.
           </div>
           <p class="code-ref">Implements: <code>MomentumStrategy.next()</code>, the <code>self.market.close[0] &lt; self.regime_ma[0]</code> branch in <code>strategy.py</code>.</p>
         </article>
@@ -782,35 +861,115 @@
           <div class="slide-number">11</div>
           <div class="slide-kicker">When does any of this actually trade?</div>
           <h3>Rebalance mechanics</h3>
-          <p class="slide-sub">Two independent triggers — whichever fires first.</p>
+          <p class="slide-sub">When the portfolio is allowed to trade — the single decision that turned out to matter most for returns.</p>
+          <div class="callout" style="margin-top:0">
+            <strong>Read this slide with one distinction in mind</strong>
+            There are two versions of this logic. The <strong>baseline design</strong> is what
+            produced every number in <a href="#results">§2</a>. The <strong>calendar-only design</strong>
+            is a revision that tests materially better and is implemented on the
+            <code>feature/calendar-only-rebalance</code> branch, but <a href="#results">§2</a> has
+            <em>not</em> been re-run under it. Both are described below, in that order. Anywhere
+            else in this document, "the strategy" means the baseline.
+          </div>
+
+          <h4 style="margin:18px 0 4px">Baseline design — two triggers, whichever fires first</h4>
           <div class="flow">
             <div class="flow-step"><div class="flow-dot">A</div><div class="flow-body"><b>Membership change</b><span>Any name enters or exits the top-N versus the last rebalance → rebalance fires immediately, regardless of schedule.</span></div></div>
-            <div class="flow-step"><div class="flow-dot">B</div><div class="flow-body"><b>Calendar trigger</b><span>The configured <code>rebalance_frequency</code> (default <code>monthly</code>) elapses — fires even if the top-N membership hasn't changed at all.</span></div></div>
+            <div class="flow-step"><div class="flow-dot">B</div><div class="flow-body"><b>Calendar trigger</b><span>The configured <code>rebalance_frequency</code> (<code>monthly</code> or <code>quarterly</code>) elapses — fires even if the top-N membership hasn't changed at all.</span></div></div>
           </div>
           <p>
-            Trigger B exists specifically because inverse-vol weights (previous slide) go stale
-            between membership changes — without it, the same names could sit at their
-            <em>original</em> sizing for months while their relative volatility drifts, since
-            nothing would otherwise force a resize.
+            Trigger B was added because inverse-vol weights (previous slide) go stale between
+            membership changes — without it, the same names could sit at their <em>original</em>
+            sizing for months while their relative volatility drifts, since nothing would otherwise
+            force a resize.
           </p>
           <p>On a rebalance: positions no longer in the new top-N are closed first; inverse-vol
           weights are recomputed for the new top-N; each target position is opened/resized via
           <code>order_target_value</code>.</p>
-          <div class="methodology-note">
-            <strong>Does the calendar cadence (Trigger B) actually matter?</strong>
-            Measured, not assumed: switching <code>rebalance_frequency</code> from <code>monthly</code>
-            to <code>quarterly</code> on the full 1997–2026 point-in-time backtest moved CAGR, Sharpe,
-            and turnover by less than 0.1 percentage points in either direction, for both
-            <code>top_n=5</code> and <code>top_n=10</code>. Counting actual rebalance events explains
-            why: Trigger A fires <strong>66x/year</strong> at <code>top_n=5</code> and
-            <strong>101x/year</strong> at <code>top_n=10</code> — a median gap of only 2–3 days between
-            rebalances — versus Trigger B's monthly/quarterly schedule. In well over 98% of rebalances,
-            Trigger A has already fired long before Trigger B's calendar window would have elapsed, so
-            the calendar cadence barely gets a turn to matter. <code>quarterly</code> is supported and
-            tested, but <code>monthly</code> remains the default since it makes no measurable difference
-            either way.
+
+          <h4 style="margin:22px 0 4px">Finding 1 — the calendar cadence is almost irrelevant</h4>
+          <p>
+            Switching <code>rebalance_frequency</code> from <code>monthly</code> to
+            <code>quarterly</code> on the full 1997–2026 backtest moved CAGR, Sharpe, and turnover
+            by less than 0.1 percentage points in either direction, at both <code>top_n</code>
+            settings. Counting the actual rebalance events explains why: <strong>Trigger A fires
+            66x/year</strong> at <code>top_n=5</code> and <strong>101x/year</strong> at
+            <code>top_n=10</code> — a median gap of 2–3 days — so in well over 98% of rebalances
+            Trigger A has already fired long before the calendar window could elapse. Changing the
+            calendar cadence changes almost nothing because the calendar was almost never the thing
+            deciding when to trade.
+          </p>
+
+          <h4 style="margin:22px 0 4px">Finding 2 — removing Trigger A entirely is a large improvement</h4>
+          <p>
+            Which raised the real question: if Trigger A is effectively the <em>only</em> trigger,
+            what happens if it's removed and trading is capped to the calendar schedule? Same
+            universe, same signals, same window — only the trade-timing rule differs:
+          </p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table" style="margin:12px 0">
+            <tr><th>Rebalance rule</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Max DD</th><th class="num">Turnover</th></tr>
+            <tr><td><code>n=5</code> · baseline (A + B)</td><td class="num">9.50%</td><td class="num">0.63</td><td class="num">−46.7%</td><td class="num">33.5x/yr</td></tr>
+            <tr class="winner"><td><code>n=5</code> · calendar-only, <strong>monthly</strong></td><td class="num good-cell">11.61%</td><td class="num good-cell">0.75</td><td class="num good-cell">−46.0%</td><td class="num good-cell">11.0x/yr</td></tr>
+            <tr><td><code>n=5</code> · calendar-only, quarterly</td><td class="num warn-cell">7.85%</td><td class="num warn-cell">0.57</td><td class="num warn-cell">−47.7%</td><td class="num">6.4x/yr</td></tr>
+            <tr><td><code>n=10</code> · baseline (A + B)</td><td class="num">8.43%</td><td class="num">0.64</td><td class="num">−43.5%</td><td class="num">31.4x/yr</td></tr>
+            <tr class="winner"><td><code>n=10</code> · calendar-only, <strong>monthly</strong></td><td class="num good-cell">8.69%</td><td class="num good-cell">0.67</td><td class="num good-cell">−38.1%</td><td class="num good-cell">10.6x/yr</td></tr>
+            <tr><td><code>n=10</code> · calendar-only, quarterly</td><td class="num warn-cell">5.69%</td><td class="num warn-cell">0.50</td><td class="num warn-cell">−44.3%</td><td class="num">6.5x/yr</td></tr>
+          </table>
           </div>
-          <p style="margin:0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the membership-diff check in <code>next()</code>.</p>
+          <p>
+            Calendar-only <em>monthly</em> improves CAGR by 2.1pp and Sharpe by 0.12 at
+            <code>n=5</code>, cuts max drawdown by 5.4pp at <code>n=10</code>, and cuts turnover
+            roughly 3x in both. Calendar-only <em>quarterly</em> is worse than the baseline on every
+            metric. That the two calendar-only variants disagree so sharply is itself informative:
+            the gain is <strong>not</strong> simply "trade less." A quarterly schedule trades even
+            less and performs worst of all. The schedule has to be slow enough to stop reacting to
+            noise, yet still fast enough to keep the momentum signal fresh — monthly happens to sit
+            near that balance, and a quarter is demonstrably too slow.
+          </p>
+
+          <h4 style="margin:22px 0 4px">Why it helps — Trigger A was forcing exits on noise, not signal</h4>
+          <p>
+            No commissions, spread, or slippage are modeled anywhere in this backtest, so this gap
+            <em>cannot</em> be a trading-cost effect. It has to come from which trades happen and
+            how long they are held. Instrumenting every completed position says exactly that: under
+            the baseline the median holding period is <strong>5 days</strong>, with 79.5% of all
+            positions closed inside 21 days; under calendar-only monthly the median is
+            <strong>32 days</strong>, with only 26.6% closed inside 21 days. Grouping every
+            completed trade by how long it was held (<code>n=5</code>) shows why that is decisive:
+          </p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table" style="margin:12px 0">
+            <tr><th>Holding period</th><th class="num">Baseline: share of trades</th><th class="num">Baseline: mean return</th><th class="num">Calendar-only: share</th><th class="num">Calendar-only: mean return</th></tr>
+            <tr><td>0–5 days</td><td class="num warn-cell">50.3%</td><td class="num warn-cell">−0.47%</td><td class="num">12.2%</td><td class="num warn-cell">−0.47%</td></tr>
+            <tr><td>6–21 days</td><td class="num warn-cell">29.2%</td><td class="num warn-cell">−0.65%</td><td class="num">14.4%</td><td class="num warn-cell">−2.23%</td></tr>
+            <tr><td>22–90 days</td><td class="num">15.6%</td><td class="num good-cell">+3.53%</td><td class="num good-cell">53.7%</td><td class="num good-cell">+0.85%</td></tr>
+            <tr class="winner"><td>91+ days</td><td class="num">4.9%</td><td class="num good-cell">+14.34%</td><td class="num good-cell">19.7%</td><td class="num good-cell">+15.80%</td></tr>
+          </table>
+          </div>
+          <p style="margin:0 0 12px">
+            The pattern is the same under both designs and is the entire story:
+            <strong>every trade closed within 21 days loses money on average, and essentially all
+            of the strategy's profit comes from positions held 22 days or longer.</strong> Momentum
+            needs weeks to pay out. The baseline's Trigger A fires on any rank change — including
+            the constant, meaningless shuffling of names hovering around the top-N cutoff — so it
+            kept selling positions within days of buying them, on noise rather than on any real
+            trend reversal, and 79.5% of its trades never survived into the range where the edge
+            actually lives. Calendar-only monthly does not pick better stocks; it picks the
+            <em>same</em> stocks and simply stops interrupting them, moving 73.4% of trades into the
+            profitable 22-day-plus buckets versus the baseline's 20.5%.
+          </p>
+          <div class="callout gotcha" style="margin:0">
+            <strong>Status, stated plainly</strong>
+            Calendar-only is implemented and unit-tested on
+            <code>feature/calendar-only-rebalance</code> and is <em>not</em> merged. Every headline,
+            chart, and regime number in <a href="#results">§2</a> is still the baseline design —
+            adopting the change would require re-running and re-publishing all of them. Quarterly-only
+            is not being pursued. If monthly calendar-only is adopted it should replace Trigger A
+            outright rather than become a config toggle, since keeping both would just preserve the
+            behavior the measurement argues against.
+          </div>
+          <p style="margin:12px 0 0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the rebalance gate in <code>next()</code>.</p>
         </article>
 
         <article class="slide" id="slide-example">
@@ -994,6 +1153,15 @@
         no spread, and no slippage.</strong> At this turnover, realistic transaction costs would
         take a real bite out of the return column; see <a href="#results-limits">Limitations</a>.
       </p>
+      <div class="callout">
+        <strong>Most of this turnover turned out to be self-inflicted</strong>
+        The figure above is not an inherent property of momentum investing — it is a consequence of
+        one rebalance rule. Removing the membership-change trigger and trading only on a monthly
+        schedule cuts turnover to ~11x a year <em>and</em> raises returns, because the median
+        holding period rises from 5 days to 32 and far more positions survive long enough to pay
+        off. That result is documented in full on <a href="#slide-rebalance">slide&nbsp;11</a>; it
+        is not reflected in any number in this section, which measures the baseline design.
+      </div>
 
       <h3 id="results-regimes">Which market conditions actually favor this strategy</h3>
       <p>
@@ -1048,6 +1216,24 @@
         Sharpe advantage comes almost entirely from the four downturn rows above, and is given back,
         not gained, during long bull markets and especially sharp V-shaped recoveries.
       </div>
+      <p style="margin-bottom:6px"><strong>The mechanism behind each regime</strong> — the table
+      above is not nine independent results, it's one design trait observed nine times:</p>
+      <div class="table-scroll" style="overflow-x:auto">
+      <table class="worked-table">
+        <tr><th>Market condition</th><th>What the strategy does</th><th>Result vs SPY</th></tr>
+        <tr><td><strong>Sustained decline</strong><br><span style="opacity:.75">GFC, dot-com, 2022</span></td><td>Benchmark breaks its 200-day average; the entire book is liquidated to cash and stays there until the average is reclaimed.</td><td class="good-cell"><strong>Large outperformance.</strong> The slower and more grinding the decline, the better this works — the filter has time to trigger before most of the damage.</td></tr>
+        <tr><td><strong>Fast crash</strong><br><span style="opacity:.75">COVID, Feb–Mar 2020</span></td><td>Same mechanism, but a 33-day drawdown barely gives a 200-day average time to react.</td><td class="good-cell">Still ahead (−13% vs −33%), but this is the closest the filter has come to being outrun. A faster crash would defeat it.</td></tr>
+        <tr><td><strong>Sharp V-shaped recovery</strong><br><span style="opacity:.75">2020–2022</span></td><td>Sits in cash while the market rebounds, because the 200-day average cannot confirm a new uptrend until much of the move has happened.</td><td class="warn-cell"><strong>Worst case by far.</strong> +26% against +114%. This is the direct, unavoidable cost of the protection above.</td></tr>
+        <tr><td><strong>Long steady bull</strong><br><span style="opacity:.75">2009–2020, 2023–2026</span></td><td>Mostly invested, but concentrated in 5–10 names and churning through them, with no drawdowns to sidestep.</td><td class="warn-cell">Steadily behind. The filter adds nothing when there is nothing to avoid, while turnover keeps working against it.</td></tr>
+        <tr><td><strong>Momentum-led selloff</strong><br><span style="opacity:.75">dot-com, 2000–2002</span></td><td>The names being sold hardest <em>are</em> the recent winners the strategy holds, so it takes the hit before the index-level filter ever triggers.</td><td>Ahead of SPY, but this is where the strategy's own worst drawdown occurs (−46.7%) — the classic momentum crash.</td></tr>
+      </table>
+      </div>
+      <p style="margin:0">
+        Every row traces to the same source: a 200-day filter is a lagging confirmation of trend,
+        so it pays off wherever declines are sustained enough to be confirmed, and costs wherever
+        reversals are faster than confirmation. That single trade-off — not stock selection —
+        explains most of the dispersion in the table.
+      </p>
       <h3 id="results-method">How these were produced</h3>
       <ul>
         <li><strong>Universe:</strong> <code>index:sp500_point_in_time</code> — actual month-by-month S&amp;P&nbsp;500 membership, so no survivorship or look-ahead bias in the candidate list (<a href="#slide-universe">slide&nbsp;2</a>).</li>
@@ -1066,18 +1252,13 @@ uv run momentum run configs/sp500_pit_1997_2026_n10.yaml --output tearsheet_n10.
         once the cache is warm.
       </p>
       <div class="methodology-note">
-        <strong>Fixed a real reproducibility bug to get numbers worth publishing</strong>
-        Re-running the same config used to give a <em>different</em> total return each time —
-        three otherwise-identical runs measured 1,219%, 1,256%, and 1,245% for <code>top_n=5</code>.
-        Cause: <code>data.py</code> re-downloaded and re-merged a ticker's <em>entire</em> price
-        history on every call whenever its cache didn't reach the requested end date — which is
-        permanent and unavoidable for any genuinely delisted or acquired constituent (its data will
-        never reach a fixed future end date), so those ~19 tickers had their entire settled history
-        silently re-fetched and potentially perturbed on every single run. Fixed by only ever
-        fetching the actually-missing head/tail of a ticker's range
-        (<code>data._download_missing_range</code>) instead of the whole thing — verified by running
-        <code>top_n=5</code> twice after the fix and diffing the two daily return series: identical
-        to the last decimal. The numbers throughout this section are from that verified run.
+        <strong>Determinism was verified, not assumed</strong>
+        A backtest is only evidence if the same inputs give the same answer every time. Both
+        configurations were run twice, independently, and their daily return series diffed against
+        each other: identical to the last decimal. Every number in this section comes from those
+        verified runs. This matters more than it sounds — the price cache is populated
+        incrementally from a live data vendor, so "same config, same result" is a property that has
+        to be actively maintained and checked, not one you get for free.
       </div>
       <p style="margin-bottom:0">
         The full monthly return series behind the table and chart above — <code>top_n=5</code>,
@@ -1165,7 +1346,7 @@ uv run momentum run configs/sp500_pit_1997_2026_n10.yaml --output tearsheet_n10.
         <tr>
           <td><code>config.py</code></td>
           <td><code>RunConfig</code> / <code>StrategyConfig</code> dataclasses; YAML loader with validation</td>
-          <td>Validates required top-level fields and <code>rebalance_frequency</code> (only <code>None</code> or <code>"monthly"</code>) at load time — fails fast instead of at strategy runtime.</td>
+          <td>Validates required top-level fields, <code>rebalance_frequency</code> (<code>None</code>, <code>"monthly"</code>, or <code>"quarterly"</code>), and <code>sizing_method</code> at load time — fails fast instead of surfacing deep inside a multi-minute run.</td>
         </tr>
         <tr>
           <td><code>universe.py</code></td>
@@ -1317,23 +1498,27 @@ strategy:
         <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. Also covers the two insufficient-history cases: a too-short benchmark raises <code>ValueError</code>, a too-short ticker is logged and skipped. This is the regression guard for cross-module wiring.</li>
         <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
       </ul>
-      <p>All 62 tests pass with <code>uv run pytest</code> in about 5 seconds; no test hits the network.</p>
+      <p>All 66 tests pass with <code>uv run pytest</code> in about 5 seconds; no test hits the network.</p>
     </section>
 
     <!-- ============================================================ -->
     <section id="interview">
-      <h2><span class="num">4</span>Design Notes</h2>
+      <h2><span class="num">4</span>Design Notes &amp; Defending the Work</h2>
       <p class="section-intro">
-        The decisions below are the ones that aren't obvious from reading the code, plus the
-        behaviors most likely to surprise someone modifying it. Read this section if you're
-        about to change something; skip it if you just want to run a backtest.
+        Three things: the decisions that aren't obvious from reading the code, the behaviors most
+        likely to surprise someone modifying it, and a worked set of the questions this project
+        invites — including the ones it doesn't answer well. If you're about to change something,
+        read the first two. If you're about to <em>discuss</em> this project, read
+        <a href="#qa">the last one</a>, and read it alongside
+        <a href="#results-limits">§2 Limitations</a>, since almost every hard question traces back
+        to a limitation that's already documented there.
       </p>
 
       <h3 id="decisions">Key design decisions</h3>
       <div class="card">
         <ul style="margin-bottom:0">
           <li><strong>Scoring math is framework-agnostic.</strong> <code>scoring.py</code> has zero <code>backtrader</code> imports specifically so the strategy's core logic can be unit tested in milliseconds, without a full backtest run.</li>
-          <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top-N for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
+          <li><strong>Dual rebalance trigger — added deliberately, then measured and challenged.</strong> The original prototype only rebalanced on membership change, which left inverse-vol weights stale for names that stayed in the top-N for months, so a calendar trigger was added alongside it. Instrumenting the result later showed the membership trigger fires 66–101x a year and preempts the calendar one in over 98% of rebalances, and that removing it outright raises CAGR by 2.1pp while cutting turnover 3x. The lesson generalizes: a rule that sounds obviously right ("react as soon as the ranking changes") was quietly the single most expensive decision in the strategy, and only measurement surfaced it. See <a href="#slide-rebalance">slide&nbsp;11</a>.</li>
           <li><strong>Cache is git-tracked, sharded, and coverage-based rather than time-based.</strong> <code>data.py</code> keeps every ticker's OHLCV history in <code>cache_data/prices_00..03.parquet</code> (long format: <code>ticker</code>, <code>Date</code>, OHLCV), checked into the repo so a fresh clone has working data for anything already fetched — no network call needed. A ticker's rows are reused only when their date range already covers what's requested, not on a TTL, so re-running the same backtest twice does zero network calls the second time either way. Rows are assigned to a shard by <code>crc32(ticker)</code> so a run that touches a few tickers rewrites only the shards those tickers live in, rather than the whole dataset — which keeps each commit's diff proportional to what actually changed, and keeps every file well under hosting size limits. Prices are stored as <code>float32</code> with zstd compression; the discarded precision is far below any price's real significance.</li>
           <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
           <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
@@ -1368,8 +1553,12 @@ strategy:
         Because <code>order_target_value</code> sizes against today's close but fills at the next bar's open, a position sized at exactly 100% of portfolio value can get margin-rejected on a single bar of price drift. The 1% reserve is a deliberate, documented workaround, not an arbitrary constant.
       </div>
       <div class="callout gotcha">
-        <strong>5. Only <code>"monthly"</code> is a valid non-null rebalance frequency today</strong>
-        <code>config.py</code> enforces this explicitly; <code>strategy.py</code>'s own <code>_is_rebalance_due</code> would otherwise raise a less-clear <code>ValueError</code> deep inside a run for any other string.
+        <strong>5. <code>rebalance_frequency</code> accepts only <code>null</code>, <code>"monthly"</code>, or <code>"quarterly"</code></strong>
+        <code>config.py</code> enforces this at load time; <code>strategy.py</code>'s own
+        <code>_is_rebalance_due</code> would otherwise raise a less-clear <code>ValueError</code>
+        deep inside a run for any other string. Note that under the baseline design the choice
+        barely affects results at all — see <a href="#slide-rebalance">slide&nbsp;11</a> for why,
+        and for the change to this logic that does matter.
       </div>
       <div class="callout gotcha">
         <strong>6. The date range must cover at least ~253 trading days</strong>
@@ -1385,29 +1574,99 @@ strategy:
       </div>
 
       <h3 id="qa">Questions you might get, and how to answer them</h3>
+      <p style="margin-top:-4px">
+        Grouped by what the question is really testing. The uncomfortable ones are included
+        deliberately — the weaknesses in <a href="#results-limits">§2 Limitations</a> and
+        <a href="#gotchas">Gotchas</a> are all fair game, and the strongest answer to each is a
+        direct one.
+      </p>
+
+      <h4 style="margin:22px 0 8px">The strategy and why it should work</h4>
+      <div class="qa">
+        <p class="q">Why should buying recent winners work? Isn't that the opposite of buying low?</p>
+        <p class="a">It is, and that's the point — momentum and value are two of the best-documented anomalies and they point in opposite directions on the same stock. The behavioral case is that information diffuses gradually, so prices underreact and the first part of a move predicts the rest; the disposition effect (selling winners early) and herding both reinforce it. The risk-based case is that momentum portfolios are crowded, high-beta, recently-rewarded positions that periodically crash, so the return is compensation rather than a mispricing. Both stories predict the same average return. I don't need to resolve which is right to trade it, but the second one tells me the drawdowns are structural and can't be diversified away. See <a href="#thesis">the investment thesis</a>.</p>
+      </div>
+      <div class="qa">
+        <p class="q">If it's this well documented, why hasn't it been arbitraged away?</p>
+        <p class="a">Because capturing it is expensive and uncomfortable. It requires continuous high turnover, so trading costs consume a large share of the paper return — which is exactly why unmodeled transaction costs are the biggest caveat on my own results. It also requires holding whatever is currently working at moments that feel obviously wrong, and sitting through multi-year stretches of underperformance. The edge is protected by cost and by career risk, not by obscurity.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Your momentum lookback runs right up to the current day. Standard academic momentum skips the most recent month — why don't you?</p>
+        <p class="a">That's a genuine deviation and a fair criticism. The standard academic construction skips the most recent month — Carhart's UMD factor and most subsequent work use "12-2" momentum, measuring from 12 months ago to one month ago — specifically because short-horizon returns exhibit <em>reversal</em> rather than continuation. The last month's move tends to partially undo itself, so including it mixes a known-negative signal into the score. <code>momentum_blend()</code> measures each lookback straight to the latest close with no skip, so this implementation carries that contamination. It's the first change I'd test on the scoring side, and it's cheap: one index offset in one function.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Why three lookback horizons instead of one?</p>
+        <p class="a">Any single lookback is a somewhat arbitrary choice that gets noisy at its own boundary — a stock can look strong on a 60-day window and weak on a 252-day one purely because of where a single large move happens to fall. Averaging 60/120/252 keeps the ranking from hinging on one window's accident. It's a variance-reduction choice, not a return-enhancing one, and it also reduces the number of free parameters I could accidentally overfit.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Holding only 5–10 names out of 500 is very concentrated. Isn't that reckless?</p>
+        <p class="a">It's deliberate, and the results show the trade-off directly. <code>top_n=5</code> earns a higher return (9.50% vs 8.43% CAGR) with a worse drawdown (−46.7% vs −43.5%) and higher volatility; <code>top_n=10</code> gives up return for a meaningfully smoother ride. Both beat the benchmark on Sharpe, which is the more durable result. Concentration is how a cross-sectional momentum signal expresses conviction — diluting to 50 names would push the portfolio toward the index and the signal toward noise. The honest caveat is that at 5 names, single-stock idiosyncratic risk is a real and largely unrewarded exposure.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What's the difference between the two momentum concepts you're using?</p>
+        <p class="a">Cross-sectional momentum ranks stocks <em>against each other</em> and holds the relative winners — that's the top-N selection. Time-series momentum asks whether an asset is rising in <em>absolute</em> terms, against its own history. This design requires both to agree: a stock must be a relative winner <em>and</em> above its own 200-day average, and the whole book goes to cash when the index itself fails the same absolute test. Requiring agreement is what stops the strategy from dutifully buying "the best-performing stocks in a collapsing market," which pure cross-sectional ranking would happily do.</p>
+      </div>
+
+      <h4 style="margin:22px 0 8px">Design and implementation choices</h4>
+      <div class="qa">
+        <p class="q">How do you know you don't have look-ahead bias?</p>
+        <p class="a">Three separate places it could enter, each addressed. Universe: membership comes from month-by-month point-in-time snapshots, so a rebalance can only choose names actually in the index on that date (<a href="#slide-universe">slide&nbsp;2</a>) — the alternative, scraping today's constituent list, silently hands the strategy every future index addition. Signals: every score is computed from a trailing window ending at the current bar, and a stock isn't scoreable until it has genuinely accumulated enough of its own history. Execution: orders are placed on the signal bar but filled at the <em>next</em> bar's open, never at the close I made the decision on. The one honest exception is shares outstanding for cap-weighted sizing, which is a current snapshot applied to past dates — it's off by default for that reason.</p>
+      </div>
       <div class="qa">
         <p class="q">Why separate <code>scoring.py</code> from <code>strategy.py</code>?</p>
-        <p class="a">Testability and reuse — the same momentum/FIP/skewness math could back a different execution engine or a research notebook without dragging in <code>backtrader</code>.</p>
+        <p class="a">Testability and reuse — the same momentum/FIP/skewness math could back a different execution engine or a research notebook without dragging in <code>backtrader</code>. In practice the payoff was speed of iteration: the scoring math is unit-tested in milliseconds, so I never had to run a 12-minute backtest to find out whether a formula was right.</p>
       </div>
       <div class="qa">
         <p class="q">Why inverse-volatility sizing instead of equal weight?</p>
-        <p class="a">It's a simple risk-parity tilt: among the top-N momentum names, it reduces the influence of the single most volatile holding on portfolio swings, without needing a full covariance-based optimizer.</p>
-      </div>
-      <div class="qa">
-        <p class="q">What happens in a sideways, choppy market?</p>
-        <p class="a">The regime filter only reacts to the benchmark's 200-day trend, so a genuinely choppy-but-flat market won't trigger the cash switch — the strategy could still whipsaw in and out of individual names as membership changes, since there's no minimum holding period beyond the periodic/membership rebalance logic.</p>
+        <p class="a">It's a simple risk-parity tilt: among the top-N momentum names, it reduces the influence of the single most volatile holding on portfolio swings, without needing a full covariance-based optimizer. Note it uses <em>downside</em> deviation rather than plain standard deviation, because ordinary volatility treats a violent up-move as identically risky to a violent down-move — which systematically penalizes exactly the stocks a momentum strategy wants to own. The deliberate consequence is that ranking and sizing disagree: the top-ranked name routinely gets the smallest allocation.</p>
       </div>
       <div class="qa">
         <p class="q">Why hold cash instead of shorting or rotating into bonds in a bear market?</p>
-        <p class="a">Simplicity, and because the regime filter is a blunt instrument. A 200-day moving average is late by construction — it exits after a decline is well underway and re-enters after a recovery is well underway. Layering shorts on top of a signal with that much lag adds a way to lose money in exactly the whipsaw conditions the filter handles worst. Rotating into bonds is more defensible and is already possible today via the <code>static</code> universe, which can include <code>TLT</code>/<code>GLD</code> and let momentum choose between asset classes directly.</p>
+        <p class="a">Simplicity, and because the regime filter is a blunt instrument. A 200-day moving average is late by construction — it exits after a decline is well underway and re-enters after a recovery is well underway. Layering shorts on top of a signal with that much lag adds a way to lose money in exactly the whipsaw conditions the filter handles worst. Rotating into bonds is more defensible and is already possible via the <code>static</code> universe, which can include <code>TLT</code>/<code>GLD</code> and let momentum choose between asset classes directly. It's also worth noting the backtest credits idle cash 0% — a real implementation holding T-bills for the ~24% of the time it's out of the market would have earned meaningfully more than these numbers show.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Walk me through a decision you made that the data later proved wrong.</p>
+        <p class="a">The rebalance trigger. The design fired a rebalance immediately whenever the top-N ranking changed, which sounds obviously correct — react as soon as your signal changes. Instrumenting it showed that trigger fired 66–101 times a year and preempted the calendar schedule in over 98% of rebalances, giving a median holding period of 5 days. Bucketing every completed trade by holding length showed why that was expensive: every trade closed within 21 days had negative average return, and essentially all the profit came from positions held 22+ days. The rule was reacting to meaningless shuffling around the top-N cutoff and cutting positions before the signal could pay out. Removing it raised CAGR 2.1pp and cut turnover 3x (<a href="#slide-rebalance">slide&nbsp;11</a>). The general lesson is that the most expensive assumption was the one that felt too obvious to test.</p>
+      </div>
+
+      <h4 style="margin:22px 0 8px">Reading the results</h4>
+      <div class="qa">
+        <p class="q">Your <code>top_n=10</code> CAGR is 8.43% against SPY's 9.27%. Why is a strategy that underperforms interesting?</p>
+        <p class="a">Because it earned that return while invested only 76% of the time, with 14.2% volatility against the benchmark's 19.5% and a −43.5% worst drawdown against −55.2%. That's a higher Sharpe (0.64 vs 0.55) and higher Sortino. The claim isn't "this beats the market" — for <code>top_n=10</code> it doesn't, on raw return. The claim is that it delivers comparable return per unit of risk while spending a quarter of the period in cash, which is a different and more defensible product: it's a risk-managed equity exposure, not an alpha engine. Anyone who wants the raw return can lever a higher-Sharpe strategy; nobody can de-risk a low-Sharpe one after the fact.</p>
+      </div>
+      <div class="qa">
+        <p class="q">In which market conditions does this actually work, and where does it fail?</p>
+        <p class="a">The pattern is sharp and consistent. It loses far less in downturns — during the GFC the strategy lost 13% against the benchmark's 55%, and in the COVID crash 13% against 33%. It lags in rallies, and lags badly in sharp V-shaped recoveries: during the 2020–2022 COVID recovery the benchmark more than doubled (+114%) while the strategy returned about a quarter of that. The whole 28-year Sharpe advantage is earned in four downturn windows and given back across long bull markets. That's not a flaw to fix; it's the direct arithmetic consequence of a 200-day filter that can only confirm a reversal well after it starts. See the <a href="#results-regimes">market-condition breakdown</a>.</p>
+      </div>
+      <div class="qa">
+        <p class="q">How do you know this isn't overfit?</p>
+        <p class="a">Mostly, I don't — and I'd rather say that than oversell it. The honest position is that these are two parameter settings run once over one long history, with no walk-forward validation, no out-of-sample test on another index or market, and no parameter sweep (<a href="#results-limits">Limitation 4</a>). What I can say is that the parameters are literature defaults rather than values I searched for — 200-day regime filter, 60/120/252 lookbacks, 252-day FIP — so there was little opportunity to fit them to this sample, and the risk-adjusted result holds across both <code>top_n</code> settings rather than at one lucky value. Proper validation is the work this needs next, and until it's done these numbers measure <em>this implementation on this history</em>, not momentum investing generally.</p>
       </div>
       <div class="qa">
         <p class="q">If you had to name the single biggest risk in the reported results, what would it be?</p>
-        <p class="a">Transaction costs. Turnover runs around 30x a year and nothing in the backtest models commissions, spread, or slippage (<a href="#results-limits">§2 Limitations</a>). The risk-adjusted edge over buy-and-hold is real in the numbers as computed, but it is not large enough that it can be assumed to survive realistic trading frictions — measuring that is the most valuable next piece of work on this codebase.</p>
+        <p class="a">Transaction costs. Turnover runs around 30x a year and nothing in the backtest models commissions, spread, or slippage (<a href="#results-limits">§2 Limitations</a>). The risk-adjusted edge over buy-and-hold is real in the numbers as computed, but it is not large enough to assume it survives realistic frictions — at 30x turnover, even a few basis points a trade compounds into a serious drag over 28 years. Measuring that is the single most valuable next piece of work, and the rebalance finding on <a href="#slide-rebalance">slide&nbsp;11</a> makes it more urgent and more promising at once: cutting turnover to ~11x while <em>improving</em> returns dramatically changes how much cost the strategy can absorb.</p>
       </div>
       <div class="qa">
+        <p class="q">Are there biases left in the data that flatter these results?</p>
+        <p class="a">Yes, and they point in both directions. Flattering: roughly a third of historical constituents have no retrievable price data — mostly companies delisted or bankrupted long ago — so the index's worst failures are under-represented in the candidate pool, and the membership reconstruction is community-maintained rather than a vendor-audited feed, with the pre-2001 stretch least reliable. Pessimistic: cash earns 0% for the ~24% of the period spent out of the market, when a real implementation would have held T-bills through years of 5%+ short rates. I don't think these cancel neatly, and I wouldn't claim they do.</p>
+      </div>
+
+      <h4 style="margin:22px 0 8px">Weaknesses and what you'd do next</h4>
+      <div class="qa">
         <p class="q">What's the biggest methodology caveat in the strategy logic itself?</p>
-        <p class="a"><code>skewness_penalty</code> rewards rather than penalizes skew under the shipped defaults (<a href="#slide-skew">slide&nbsp;7</a>), so the strategy currently tilts <em>toward</em> jumpy, lottery-like names. That's a defensible configuration choice, but it's the opposite of what the parameter's name implies and the opposite of what momentum-crash literature would suggest — worth a deliberate decision rather than inheriting it by default.</p>
+        <p class="a"><code>skewness_penalty</code> rewards rather than penalizes skew under the shipped defaults (<a href="#slide-skew">slide&nbsp;7</a>) — it's added with a positive sign and a positive weight, so the strategy tilts <em>toward</em> jumpy, lottery-like names. That's the opposite of what the parameter name implies and the opposite of what momentum-crash literature argues for. Compounding it, the three score terms are summed without normalization, and skew's natural range (roughly ±3) is several times wider than momentum's (roughly ±0.5), so despite equal 0.5 weights, skew moves the ranking more than either of the other two signals. The worked example on <a href="#slide-example">slide&nbsp;12</a> shows a 0.20 difference in skew overturning a 3.2-point difference in momentum.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What happens in a sideways, choppy market?</p>
+        <p class="a">This is the design's weakest regime and the filter doesn't help. A 200-day average only reacts to the benchmark's trend, so a market that chops sideways without a sustained decline never triggers the cash switch — the strategy stays invested and rotates through whichever names are transiently leading. Under the baseline rebalance rule that's actively costly, since it churns on rank noise with a 5-day median holding period. It's the same weakness the rebalance finding addresses.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Given unlimited time, what would you do next, in order?</p>
+        <p class="a">Four things. <strong>One:</strong> model transaction costs — it's the largest unknown and it determines whether anything else matters. <strong>Two:</strong> adopt the calendar-only rebalance rule and re-run the published results under it, since it improves return and cuts turnover 3x, which compounds directly with the cost work. <strong>Three:</strong> fix the two scoring issues — normalize the three score terms so the weights mean what they say, and skip the most recent month in the momentum lookback to stop feeding short-term reversal into the signal. <strong>Four:</strong> walk-forward validation and an out-of-sample test on a different index, because until that exists this is a well-measured backtest rather than evidence about the future.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What would make you abandon this strategy?</p>
+        <p class="a">Concretely: if modeled transaction costs at realistic spreads erase the Sharpe advantage over buy-and-hold, the strategy has no reason to exist in this form. Beyond that, the structural risk is that the regime filter's protection is what the entire edge rests on — it's earned in four downturn windows out of nine regimes. If that mechanism stopped working, either because drawdowns arrive faster than a 200-day average can react (2020 was already close) or because the market stops producing the kind of sustained declines it's designed to sidestep, then what's left is a concentrated, high-turnover portfolio that lags in bull markets, which is a strictly worse product than an index fund.</p>
       </div>
     </section>
 
