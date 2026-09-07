@@ -309,6 +309,8 @@
   .methodology-note strong { display: block; margin-bottom: 4px; color: var(--warn); }
   .worked-table td.num, .worked-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .worked-table tr.winner td { font-weight: 700; }
+  .worked-table td.warn-cell { color: var(--warn); }
+  .worked-table td.good-cell { color: var(--good); font-weight: 600; }
   .pipeline-strip {
     display: flex;
     flex-wrap: wrap;
@@ -349,7 +351,12 @@
     <a class="sub" href="#slide-rebalance">Rebalance mechanics</a>
     <a class="sub" href="#slide-example">Worked example</a>
     <a class="sub" href="#nongoals">Non-goals</a>
-    <a href="#architecture">2 · Code &amp; How to Run</a>
+    <a href="#results">2 · Backtest Results</a>
+    <a class="sub" href="#results-headline">1997–2026 headline</a>
+    <a class="sub" href="#results-risk">Risk profile</a>
+    <a class="sub" href="#results-method">Method &amp; reproduction</a>
+    <a class="sub" href="#results-limits">Limitations</a>
+    <a href="#architecture">3 · Code &amp; How to Run</a>
     <a class="sub" href="#layout-map">Package layout</a>
     <a class="sub" href="#modules">Module reference</a>
     <a class="sub" href="#dataflow">Data flow</a>
@@ -357,13 +364,7 @@
     <a class="sub" href="#running-sp500">Running with S&amp;P 500</a>
     <a class="sub" href="#config-ref">Config reference</a>
     <a class="sub" href="#testing">Testing</a>
-    <a href="#research">3 · The Research Process</a>
-    <a class="sub" href="#research-at-a-glance">Investigation at a glance</a>
-    <a class="sub" href="#research-steps">Results by top_n</a>
-    <a class="sub" href="#exploring-cap-weighted">Exploring cap-weighted sizing</a>
-    <a class="sub" href="#exploring-grid">Sizing × top_n grid</a>
-    <a class="sub" href="#research-qa">Research Q&amp;A</a>
-    <a href="#interview">4 · Interview Prep</a>
+    <a href="#interview">4 · Design Notes</a>
     <a class="sub" href="#decisions">Design decisions</a>
     <a class="sub" href="#gotchas">Gotchas worth knowing</a>
     <a class="sub" href="#qa">Likely questions</a>
@@ -376,10 +377,10 @@
       <p class="lede">
         A strategy that rotates money into whichever stocks have recently been rising fastest,
         backtested with <code>backtrader</code> and packaged as an installable, config-driven
-        Python tool. This doc explains <em>what the strategy does and why</em> in plain terms,
-        <em>how the codebase is put together</em>, and <em>the actual research process</em> used
-        to find and fix what was wrong with it — enough to walk through any of the three in an
-        interview, even without a finance background.
+        Python tool. This doc explains <em>exactly what the strategy does and why</em>, every
+        formula it uses, <em>how it performed</em> over a 28-year survivorship-bias-free
+        S&amp;P&nbsp;500 backtest, and <em>how the codebase is put together</em> — written to be
+        followable without a finance background.
       </p>
     </header>
 
@@ -410,9 +411,9 @@
         Twelve slides, in the order the code actually executes them: from "what is this
         strategy, conceptually" down to the exact formulas and the mechanics of when and how
         the portfolio changes. Every formula below is a direct transcription of a function in
-        <code>scoring.py</code>, <code>indicators.py</code>, or <code>strategy.py</code> — not
-        a textbook approximation — including two places where the code's actual math differs
-        from what its variable names imply.
+        <code>scoring.py</code> or <code>strategy.py</code> — not a textbook approximation.
+        Read top to bottom and you have the complete decision procedure the backtest executes
+        on every single trading day.
       </p>
 
       <div class="pipeline-strip">
@@ -439,7 +440,7 @@
           <div class="grid-3">
             <div class="card">
               <span class="badge">Cross-sectional</span>
-              <p style="margin:0">Rank stocks <em>against each other</em> every period. Only the strongest relative performers (top&nbsp;5) are held — the classic Jegadeesh &amp; Titman (1993) momentum effect.</p>
+              <p style="margin:0">Rank stocks <em>against each other</em> every period. Only the strongest relative performers (top&nbsp;10 by default) are held — the classic Jegadeesh &amp; Titman (1993) momentum effect.</p>
             </div>
             <div class="card">
               <span class="badge">Time-series</span>
@@ -457,23 +458,32 @@
           <div class="slide-number">02</div>
           <div class="slide-kicker">Foundations</div>
           <h3>The universe</h3>
-          <p class="slide-sub">What's eligible to be ranked in the first place.</p>
+          <p class="slide-sub">What's eligible to be ranked in the first place — and why getting this right matters more than any formula on the later slides.</p>
           <p>
-            <code>configs/default.yaml</code> ships a static list of ~140 tickers spanning
-            mega-cap single names (tech, healthcare, financials, industrials, staples, energy),
-            sector SPDRs (<code>XLK</code>, <code>XLF</code>, …), factor/style ETFs
-            (<code>MTUM</code>, <code>QUAL</code>, <code>VLUE</code>, <code>USMV</code>),
-            thematic ETFs (<code>ARKK</code>, <code>ICLN</code>, <code>SOXX</code>),
-            international/EM (<code>EFA</code>, <code>EEM</code>, <code>FXI</code>), and
-            bonds/commodities (<code>TLT</code>, <code>GLD</code>, <code>USO</code>). The point
-            of the breadth: momentum can rotate into <em>whatever regime is actually
-            working</em> — equities, gold, bonds — not just stocks.
+            Three interchangeable sources, set by <code>universe.source</code>:
           </p>
+          <table class="worked-table" style="margin:12px 0">
+            <tr><th>Source</th><th>What it resolves to</th><th>Survivorship bias</th></tr>
+            <tr><td><code>static</code></td><td>An inline list in the config — <code>configs/default.yaml</code> ships ~140 tickers spanning mega-caps, sector SPDRs, factor/thematic ETFs, international/EM, and bonds/commodities, so momentum can rotate into whatever asset class is working.</td><td>Whatever you put in it</td></tr>
+            <tr><td><code>index:sp500</code></td><td>Scrapes <em>today's</em> S&amp;P&nbsp;500 constituent table from Wikipedia at run time.</td><td class="warn-cell"><strong>Yes</strong> — today's list applied to the past</td></tr>
+            <tr class="winner"><td><code>index:sp500_point_in_time</code></td><td>Reconstructs the index's <em>actual</em> membership month by month, from a stored table of monthly constituent snapshots (1996&nbsp;→&nbsp;2026). Each rebalance can only pick from the names genuinely in the index on that date.</td><td><strong>No</strong></td></tr>
+          </table>
+          <div class="methodology-note">
+            <strong>Why the point-in-time source exists</strong>
+            Backtesting momentum against <em>today's</em> S&amp;P&nbsp;500 hands the strategy a
+            roster picked with hindsight. Names that joined the index recently — precisely
+            <em>because</em> they went up a lot — are retroactively made available to buy years
+            before they qualified, while companies that were in the index and then failed out of
+            it silently disappear from the test. For a strategy whose entire job is buying recent
+            winners, that is not a small distortion. The point-in-time source removes it: on any
+            given rebalance date the candidate list is the membership that actually existed then,
+            including the names that later got acquired, delisted, or dropped. All results in
+            <a href="#results">§2</a> use this source.
+          </div>
           <p style="margin:0">
-            The universe is pluggable: <code>source: static</code> uses that inline list;
-            <code>source: index:sp500</code> instead scrapes the live S&amp;P&nbsp;500
-            constituent table from Wikipedia at run time (<code>universe.py</code>) — see
-            <a href="#running-sp500">§2 Running with S&amp;P 500</a>.
+            Price history for every ticker that has <em>ever</em> been a member is loaded up
+            front (including long-dead names), and each stock only becomes scoreable once it has
+            enough of its own real trading history to fill every lookback window.
           </p>
         </article>
 
@@ -501,7 +511,7 @@
           <div class="methodology-note">
             <strong>What resets on a flip to cash</strong>
             <code>last_rebalanced_stocks</code> is cleared to an empty list. So the moment the
-            regime turns bullish again, the new top-5 selection is, by definition, a full
+            regime turns bullish again, the new top-N selection is, by definition, a full
             "membership change" from empty — forcing an immediate rebalance into the new book
             rather than waiting for the monthly trigger.
           </div>
@@ -526,7 +536,7 @@
             stock actually has to clear <em>two</em> independent absolute-trend gates before its
             relative score is even considered.
           </p>
-          <p class="code-ref">Implements: the <code>d.close[0] &lt;= self.indicators[...]["ts_mom"][0]: continue</code> guard in <code>strategy.py</code>.</p>
+          <p class="code-ref">Implements: the <code>d.close[0] &lt;= self._trend_sma(d): continue</code> guard in <code>strategy.py</code>.</p>
         </article>
 
         <article class="slide" id="slide-momentum">
@@ -553,18 +563,12 @@
             window's noise dominates the ranking.
           </p>
           <div class="methodology-note">
-            <strong>Fixed — this was absolute price momentum, not percentage return</strong>
-            <code>momentum_blend()</code> originally computed <i>Close</i>(t) − <i>Close</i>(t−L)
-            directly on raw prices, never dividing by the starting price — a $500 stock that
-            moved $40 scored <strong>higher</strong> than a $15 stock that moved $3, even if the
-            $15 stock's percentage gain was actually larger, biasing the ranking toward
-            high-priced names. Normalizing to a percentage return (shown above) fixed this.
-            <strong>Measured effect</strong> on the real S&amp;P&nbsp;500 backtest
-            (<a href="#running-sp500">§2</a>): Sharpe ratio −0.03 → 0.08, CAGR −0.7% → +0.3%, and
-            annualized turnover dropped 4.06x → 2.42x/year — a more stable ranking traded less.
-            Still well behind the benchmark's 8.8% CAGR, so this was a real contributor but not
-            the whole story. See the worked example on <a href="#slide-example">slide 12</a> for
-            the before/after on a concrete ranking.
+            <strong>Percentage return, not dollar change</strong>
+            Each horizon is normalized by its own starting price, so the score is scale-free: a
+            $15 stock that gained $3 (+20%) outranks a $500 stock that gained $40 (+8%). Ranking
+            on raw dollar moves instead would systematically favour high-priced names for no
+            economic reason. See <a href="#slide-example">slide&nbsp;12</a> for this on a
+            concrete three-stock ranking.
           </div>
           <p class="code-ref">Implements: <code>scoring.momentum_blend()</code>, called from <code>MomentumStrategy._momentum_score()</code>.</p>
         </article>
@@ -592,7 +596,7 @@
             keeps continuing — while the same total return delivered via a few large jump days
             tends to reflect one-off news that doesn't continue as reliably.
           </p>
-          <p class="code-ref">Implements: <code>scoring.fip_score()</code>, wrapped by the <code>FrogInThePan</code> indicator in <code>indicators.py</code>.</p>
+          <p class="code-ref">Implements: <code>scoring.fip_score()</code>, called from <code>MomentumStrategy._fip_score()</code>.</p>
         </article>
 
         <article class="slide" id="slide-skew">
@@ -613,16 +617,16 @@
             <li>positive skew = occasional large up-days on a base of small down-days ("lottery-like"); negative skew = the reverse</li>
           </ul>
           <div class="methodology-note">
-            <strong>Naming vs. behavior — worth knowing cold</strong>
-            The weight for this term is called <code>skewness_penalty</code>, but it's added to
-            the combined score (next slide) with a <em>positive</em> sign and a positive default
-            value (0.5) — so under current defaults, <strong>more</strong> positively-skewed,
-            jumpier return distributions score <strong>higher</strong>, not lower. If the intent
-            was to genuinely penalize jump-driven moves (as the name implies, and as
-            momentum-crash literature would argue), this coefficient needs to be negative. As
-            shipped, it's a configurable tilt, not a penalty.
+            <strong>Read the sign carefully: this is a tilt, not a penalty</strong>
+            The weight is named <code>skewness_penalty</code>, but it enters the combined score
+            (next slide) with a <em>positive</em> sign and a positive default (0.5) — so as
+            shipped, <strong>more</strong> positively-skewed, jumpier names score
+            <strong>higher</strong>. To genuinely penalize jump-driven moves, as
+            momentum-crash literature would argue for, set this coefficient
+            <em>negative</em> in the config. The name describes an intent; the sign describes
+            the behavior, and the sign is what runs.
           </div>
-          <p class="code-ref">Implements: <code>scoring.skewness_score()</code> (via <code>scipy.stats.skew</code>), wrapped by the <code>RollingSkewness</code> indicator in <code>indicators.py</code>.</p>
+          <p class="code-ref">Implements: <code>scoring.skewness_score()</code> (via <code>scipy.stats.skew</code>), called from <code>MomentumStrategy._skewness_score()</code>.</p>
         </article>
 
         <article class="slide" id="slide-combine">
@@ -642,15 +646,13 @@
             <li><i>w</i><sub>m</sub>, <i>w</i><sub>f</sub>, <i>w</i><sub>s</sub> — <code>momentum_weight</code>, <code>fip_weight</code>, <code>skewness_penalty</code>; default 0.5 each</li>
           </ul>
           <div class="methodology-note">
-            <strong>Improved, not fully solved — the three terms still aren't on identical scales</strong>
-            Now that <i>M</i><sub>i</sub> is a percentage return (<a href="#slide-momentum">slide&nbsp;5</a>),
-            it typically sits in roughly [−0.5, 0.5] for a 3-year window — much closer to
-            <i>FIP</i><sub>i</sub>'s [0, 1] and <i>Skew</i><sub>i</sub>'s roughly [−3, 3] than the
-            old raw-dollar version, which could run into the tens. It's no longer 15–20&times; out
-            of scale, but the three terms still aren't formally rescaled onto a common, comparable
-            range against each other, so <em>Skew</em><sub>i</sub>'s wider typical range can still outweigh the
-            other two more than the equal 0.5 weights might suggest. The slide-12 worked example
-            shows the before/after concretely.
+            <strong>The three terms are summed raw, not rescaled — know their typical ranges</strong>
+            <i>M</i><sub>i</sub> is a percentage return, typically in roughly [−0.5, 0.5];
+            <i>FIP</i><sub>i</sub> is a fraction, strictly [0, 1]; <i>Skew</i><sub>i</sub>
+            typically runs about [−3, 3]. Because they're added without normalization,
+            equal 0.5 weights do <em>not</em> mean equal influence — skew's wider natural range
+            gives it more sway over the ranking than its weight suggests. Worth accounting for
+            before reading the weights as a statement of intent.
           </div>
           <p style="margin:0">Stocks are ranked by this score, highest to lowest — the ranking that feeds directly into top-N selection on the next slide.</p>
         </article>
@@ -669,11 +671,12 @@
             [history<sub>i</sub> ≥ min required]
           </div>
           <p>
-            Only names passing <em>all three</em> — the trend filter (slide&nbsp;4), a positive
-            momentum score, and enough price history to compute every indicator — get a
+            Only names passing <em>all</em> gates — index membership on this date
+            (slide&nbsp;2), the trend filter (slide&nbsp;4), a positive momentum score, and
+            enough of the stock's own real price history to fill every lookback window — get a
             <i>Score</i><sub>i</sub> computed at all. Eligible names are sorted by
-            <i>Score</i><sub>i</sub> descending, and the top <code>top_n</code> (default 5)
-            become the target portfolio for this bar.
+            <i>Score</i><sub>i</sub> descending, and the top <code>top_n</code>
+            (default&nbsp;10) become the target portfolio for this bar.
           </p>
           <p style="margin:0" class="code-ref">Implements: the scoring loop and <code>scores.sort(...)[: self.p.top_n]</code> in <code>MomentumStrategy.next()</code>.</p>
         </article>
@@ -701,39 +704,24 @@
             <li>a near-zero DD (e.g. no down days at all) is floored at a small constant rather than treated as "no data" — otherwise a genuinely low-risk stock would be excluded from sizing entirely instead of rewarded for it</li>
           </ul>
           <div class="methodology-note">
-            <strong>Three stages, each measured on the same real S&amp;P&nbsp;500 backtest — a case study in fix vs. tune</strong>
-            This formula went through three versions, and each change was re-run end-to-end
-            rather than assumed to help:
-            <table class="worked-table" style="margin-top:10px">
-              <tr><th>Version</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th></tr>
-              <tr><td>1. Price-level stdev <code>StdDev(d.close)</code> — the original bug</td><td class="num">+0.3%</td><td class="num">0.08</td><td class="num">2.42x</td></tr>
-              <tr><td>2. Return stdev <code>StdDev(PctChange(d.close))</code> — the fix</td><td class="num">+1.4%</td><td class="num">0.28</td><td class="num">1.79x</td></tr>
-              <tr class="winner"><td>3. Downside deviation (current) — the refinement</td><td class="num">+1.5%</td><td class="num">0.28</td><td class="num">1.73x</td></tr>
-            </table>
-            Version 1→2 was a genuine <em>bug</em> fix: price-level stdev isn't "volatility" by any
-            standard finance definition, and fixing it measurably helped (CAGR +0.3%→+1.4%). Version
-            2→3 was a <em>refinement</em>, not a bug fix — full return stdev already penalizes
-            upside moves the same as downside moves, which arguably over-penalizes a stock that's
-            volatile because it keeps jumping <em>up</em>. The idea is sound (it's the same logic
-            behind the Sortino ratio), but measured here it made essentially no difference
-            (0.28 → 0.28 Sharpe, +1.4%→+1.5% CAGR) — reported honestly rather than framed as a win
-            it didn't produce. See <a href="#research">§3 The Research Process</a> for the full
-            research log and why this distinction (bug fix vs. untested refinement vs. parameter
-            tuning) matters.
+            <strong>Why downside deviation rather than plain volatility</strong>
+            Ordinary standard deviation treats a violent move <em>up</em> as exactly as risky as
+            a violent move down, which over-penalizes precisely the stocks a momentum strategy
+            wants to hold. Downside deviation counts only the negative days — the same reasoning
+            behind the Sortino ratio — so a stock that is "volatile" because it keeps gapping up
+            is not punished for it.
             <br><br>
-            A fourth variant was also tested: <code>sizing_method: cap_weighted</code> multiplies
-            this same formula's numerator by an approximate market cap
-            (<code>shares_outstanding × close</code>) instead of using DD<sub>i</sub> alone —
-            tilting toward larger, more liquid names for the same risk. Measured worse (Sharpe
-            0.28→0.16, CAGR +1.5%→+0.8%; see <a href="#exploring-cap-weighted">§3</a>), so it stays
-            available as a config option, not the default.
+            An alternative is available as <code>sizing_method: cap_weighted</code>, which
+            multiplies the numerator by an approximate market cap
+            (<code>shares_outstanding × close</code>), tilting toward larger, more liquid names
+            at equal risk. It is not the default; <code>inverse_vol</code> is.
           </div>
           <p style="margin:0">
             Every rebalance also reserves 1% of portfolio value as a buffer — <code>order_target_value</code>
             sizes against today's close but fills at the next bar's open, and a position sized at
             exactly 100% of value can get margin-rejected on a single bar of price drift.
           </p>
-          <p class="code-ref">Implements: <code>scoring.downside_deviation()</code> and <code>scoring.inverse_vol_weights()</code>, via the <code>DownsideDeviation</code> indicator in <code>indicators.py</code>, called from <code>MomentumStrategy.next()</code>.</p>
+          <p class="code-ref">Implements: <code>scoring.downside_deviation()</code> and <code>scoring.inverse_vol_weights()</code>, called from <code>MomentumStrategy.next()</code> via <code>_volatility()</code>.</p>
         </article>
 
         <article class="slide" id="slide-rebalance">
@@ -760,50 +748,69 @@
         <article class="slide" id="slide-example">
           <div class="slide-number">12</div>
           <div class="slide-kicker">Putting it together</div>
-          <h3>Worked example — both fixes, before and after</h3>
-          <p class="slide-sub">Three synthetic candidates on the same rebalance day, run through the exact formulas above. Prices/FIP/Skew are illustrative; the before/after scores use the actual (fixed) formula and the original (raw-difference) one side by side.</p>
+          <h3>Worked example — one rebalance day, end to end</h3>
+          <p class="slide-sub">Five candidates on a single rebalance day, run through the exact formulas on slides 3–10. Numbers are illustrative but internally consistent: every score and weight below is what the shipped code computes from these inputs.</p>
+
+          <h4 style="margin-top:4px">Step 1 — the gates (slides 3, 4, 9)</h4>
+          <p>The benchmark is above its 200-day average, so the regime is bullish and the strategy is allowed to hold stock. Each candidate is then checked individually:</p>
           <div class="table-scroll" style="overflow-x:auto">
           <table class="worked-table">
-            <tr><th>Ticker</th><th class="num">Price</th><th class="num">$ move</th><th class="num">% return (Mᵢ)</th><th class="num">FIPᵢ</th><th class="num">Skewᵢ</th><th class="num">Score (before fix)</th><th>Rank</th><th class="num">Score (after fix)</th><th>Rank</th></tr>
-            <tr><td>HIPX</td><td class="num">$480</td><td class="num">+$38.00</td><td class="num">+8.6%</td><td class="num">0.58</td><td class="num">+0.15</td><td class="num">19.37</td><td>1st</td><td class="num">0.408</td><td>2nd</td></tr>
-            <tr><td>MIDX</td><td class="num">$90</td><td class="num">+$9.50</td><td class="num">+11.8%</td><td class="num">0.62</td><td class="num">−0.05</td><td class="num">5.04</td><td>2nd</td><td class="num">0.344</td><td>3rd</td></tr>
-            <tr class="winner"><td>LOWX</td><td class="num">$15</td><td class="num">+$2.10</td><td class="num">+16.3%</td><td class="num">0.55</td><td class="num">+0.40</td><td class="num">1.53</td><td>3rd</td><td class="num">0.556</td><td>1st</td></tr>
+            <tr><th>Ticker</th><th>In the index today?</th><th>Above own 200-day SMA?</th><th class="num">Mᵢ</th><th>Enough history?</th><th>Verdict</th></tr>
+            <tr><td>HIPX</td><td>yes</td><td>yes</td><td class="num">+8.6%</td><td>yes</td><td class="good-cell">scored</td></tr>
+            <tr><td>MIDX</td><td>yes</td><td>yes</td><td class="num">+11.8%</td><td>yes</td><td class="good-cell">scored</td></tr>
+            <tr><td>LOWX</td><td>yes</td><td>yes</td><td class="num">+16.3%</td><td>yes</td><td class="good-cell">scored</td></tr>
+            <tr><td>FADX</td><td>yes</td><td class="warn-cell"><strong>no</strong></td><td class="num">+4.1%</td><td>yes</td><td class="warn-cell">rejected — trend filter</td></tr>
+            <tr><td>NEWX</td><td>yes</td><td>yes</td><td class="num">+22.0%</td><td class="warn-cell"><strong>no</strong> (IPO'd 4 months ago)</td><td class="warn-cell">rejected — history</td></tr>
           </table>
           </div>
           <p>
-            LOWX has the <strong>largest percentage gain of the three (+16.3%)</strong>. Under the
-            original raw-difference formula it ranked <em>last</em> — its $2.10 move was dwarfed by
-            HIPX's $38.00, and FIP/Skew couldn't offset a 15–20&times; gap in the momentum term.
-            After normalizing to percentage returns, the ranking flips: LOWX moves from 3rd to
-            <strong>1st</strong>, and HIPX drops from 1st to 2nd. This is the actual mechanism
-            behind the real-run improvement on <a href="#slide-momentum">slide&nbsp;5</a> — the
-            fix doesn't just shrink the numbers, it changes which stocks get bought.
+            FADX is rising (+4.1%) but is below its own 200-day average, so absolute and relative
+            trend disagree and it is dropped regardless of score. NEWX has the strongest momentum
+            of all five and is still dropped: it cannot fill the 252-day FIP window, so no score
+            is computed rather than one computed from partial data.
           </p>
+
+          <h4>Step 2 — score and rank the survivors (slides 5–8)</h4>
+          <div class="formula" style="font-size:15px">
+            <i>Score</i><sub>i</sub> <span class="op">=</span> 0.5·<i>M</i><sub>i</sub>
+            <span class="op">+</span> 0.5·<i>FIP</i><sub>i</sub>
+            <span class="op">+</span> 0.5·<i>Skew</i><sub>i</sub>
+          </div>
           <div class="table-scroll" style="overflow-x:auto">
           <table class="worked-table">
-            <tr><th>Ticker</th><th class="num">1. Price stdev</th><th class="num">Weight</th><th class="num">2. Return stdev</th><th class="num">Weight</th><th class="num">3. Downside dev.</th><th class="num">Weight</th></tr>
-            <tr><td>HIPX</td><td class="num">$25.00</td><td class="num">3.8%</td><td class="num">1.8%</td><td class="num">42.9%</td><td class="num">1.1%</td><td class="num">50.2%</td></tr>
-            <tr><td>MIDX</td><td class="num">$6.00</td><td class="num">16.0%</td><td class="num">2.2%</td><td class="num">35.1%</td><td class="num">1.7%</td><td class="num">32.5%</td></tr>
-            <tr class="winner"><td>LOWX</td><td class="num">$1.20</td><td class="num">80.1%</td><td class="num">3.5%</td><td class="num">22.0%</td><td class="num">3.2%</td><td class="num">17.3%</td></tr>
+            <tr><th>Ticker</th><th class="num">Price</th><th class="num">Mᵢ</th><th class="num">FIPᵢ</th><th class="num">Skewᵢ</th><th class="num">Score</th><th>Rank</th></tr>
+            <tr class="winner"><td>LOWX</td><td class="num">$15</td><td class="num">+16.3%</td><td class="num">0.55</td><td class="num">+0.40</td><td class="num">0.556</td><td>1st</td></tr>
+            <tr><td>HIPX</td><td class="num">$480</td><td class="num">+8.6%</td><td class="num">0.58</td><td class="num">+0.15</td><td class="num">0.408</td><td>2nd</td></tr>
+            <tr><td>MIDX</td><td class="num">$90</td><td class="num">+11.8%</td><td class="num">0.62</td><td class="num">−0.05</td><td class="num">0.344</td><td>3rd</td></tr>
+          </table>
+          </div>
+          <p>
+            Note MIDX: it has a <em>higher</em> momentum score than HIPX (+11.8% vs +8.6%) and a
+            higher FIP (0.62 vs 0.58), yet ranks below it — its slightly negative skew
+            (−0.05 vs +0.15) is enough to flip the order. That is the scale asymmetry from
+            <a href="#slide-combine">slide&nbsp;8</a> in action: with the three terms summed
+            un-normalized, a 0.20 difference in skew outweighs a 3.2-point difference in
+            momentum. Worth internalizing before treating the equal 0.5 weights as "all three
+            matter equally."
+          </p>
+
+          <h4>Step 3 — size the book (slide 10)</h4>
+          <p>Sizing is computed independently of the ranking — position <em>order</em> comes from score, position <em>size</em> comes purely from risk:</p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table">
+            <tr><th>Ticker</th><th class="num">Downside dev. DDᵢ</th><th class="num">1 / DDᵢ</th><th class="num">Weight wᵢ</th><th class="num">Target $ (on a $100k book)</th></tr>
+            <tr><td>HIPX</td><td class="num">1.1%</td><td class="num">90.9</td><td class="num">50.2%</td><td class="num">$49,728</td></tr>
+            <tr><td>MIDX</td><td class="num">1.7%</td><td class="num">58.8</td><td class="num">32.5%</td><td class="num">$32,175</td></tr>
+            <tr><td>LOWX</td><td class="num">3.2%</td><td class="num">31.3</td><td class="num">17.3%</td><td class="num">$17,097</td></tr>
           </table>
           </div>
           <p style="margin:0">
-            Suppose all three make the top-N (sizing runs independently of the momentum ranking
-            above). Under the original price-level formula, LOWX got <strong>80% of the book's
-            capital</strong> simply because its low share price mechanically produced a small
-            price-level standard deviation — even though, measured properly on daily returns,
-            LOWX is actually the <em>most</em> volatile (choppy, low-priced) of the three, not the
-            least. Fixing to return stdev drops LOWX to <strong>22%</strong> — a complete reversal,
-            not just a smaller number — that was the second, independent bug fix
-            (<a href="#slide-sizing">slide&nbsp;10</a>): fixing momentum changed <em>who gets
-            picked</em>, fixing sizing changed <em>how much they get</em>, and both measurably
-            improved the real backtest. Refining further to downside deviation shifts weight from
-            LOWX to HIPX again (22%→17% vs. 43%→50%): HIPX's volatility is mostly smooth
-            <em>upside</em> (little downside to measure), so it's rewarded a second time, while
-            LOWX's choppiness includes real downside, so it isn't. Directionally sensible — but on
-            the real backtest this third step measured as a wash, not an improvement. See
-            <a href="#research">§3 The Research Process</a> for why that distinction (bug fix vs.
-            untested-but-reasonable refinement) matters.
+            LOWX is the <em>top-ranked</em> name but gets the <em>smallest</em> allocation
+            (17.3%), because it is roughly three times as volatile on the downside as HIPX. This
+            is the intended behavior: momentum decides <strong>what to own</strong>, inverse
+            volatility decides <strong>how much of it to own</strong>, and the two answers are
+            deliberately allowed to disagree. Targets sum to $99,000 rather than $100,000 — the
+            1% buffer from slide&nbsp;10 that keeps a next-bar fill from being margin-rejected.
           </p>
         </article>
 
@@ -816,8 +823,137 @@
     </section>
 
     <!-- ============================================================ -->
+    <section id="results">
+      <h2><span class="num">2</span>Backtest Results — S&amp;P 500, 1997–2026</h2>
+      <p class="section-intro">
+        One backtest, run twice: identical configuration apart from how many names are held at
+        once (<code>top_n</code>&nbsp;=&nbsp;5 and 10). Twenty-eight and a half measured years,
+        the full S&amp;P&nbsp;500 as it actually existed on each date, benchmarked against
+        buy-and-hold SPY over the <em>same</em> window.
+      </p>
+
+      <h3 id="results-headline">Headline numbers</h3>
+      <p>
+        Period: <strong>Jan 1998 – Jun 2026</strong> (the strategy's first tradeable day comes
+        after the 200-day regime-SMA warmup; the benchmark is measured over that identical
+        window, not a longer one).
+      </p>
+      <div class="table-scroll" style="overflow-x:auto">
+      <table class="worked-table">
+        <tr>
+          <th>Metric</th>
+          <th class="num">Strategy, top_n=5</th>
+          <th class="num">Strategy, top_n=10</th>
+          <th class="num">Benchmark (SPY)</th>
+        </tr>
+        <tr><td><strong>Cumulative return</strong></td><td class="num good-cell">1,223.7%</td><td class="num">910.6%</td><td class="num">1,157.1%</td></tr>
+        <tr><td><strong>CAGR</strong></td><td class="num good-cell">9.51%</td><td class="num">8.47%</td><td class="num">9.31%</td></tr>
+        <tr><td><strong>Sharpe ratio</strong></td><td class="num">0.63</td><td class="num good-cell">0.64</td><td class="num">0.56</td></tr>
+        <tr><td>Sortino ratio</td><td class="num">0.88</td><td class="num good-cell">0.91</td><td class="num">0.79</td></tr>
+        <tr><td>Volatility (ann.)</td><td class="num">16.75%</td><td class="num good-cell">14.26%</td><td class="num">19.38%</td></tr>
+        <tr><td><strong>Max drawdown</strong></td><td class="num">−46.7%</td><td class="num good-cell">−43.5%</td><td class="num warn-cell">−55.2%</td></tr>
+        <tr><td>Best year</td><td class="num">+72.5%</td><td class="num">+43.2%</td><td class="num">+32.3%</td></tr>
+        <tr><td>Worst year</td><td class="num">−36.7%</td><td class="num">−29.5%</td><td class="num">−36.8%</td></tr>
+        <tr><td>Winning years</td><td class="num">71.4%</td><td class="num">78.6%</td><td class="num">79.3%</td></tr>
+        <tr><td>Time in market</td><td class="num">77.0%</td><td class="num">77.0%</td><td class="num">100%</td></tr>
+        <tr><td>Annualized turnover</td><td class="num">33.5x</td><td class="num">31.4x</td><td class="num">—</td></tr>
+      </table>
+      </div>
+      <p>
+        Read the two columns as a trade-off rather than a winner and a loser.
+        <strong><code>top_n=5</code></strong> edges out the benchmark on raw return
+        (1,223.7% vs 1,157.1%; 9.51% vs 9.31% CAGR).
+        <strong><code>top_n=10</code></strong> gives up about a point of CAGR and ends
+        <em>behind</em> the benchmark on cumulative return, but does so with markedly less risk —
+        14.3% volatility against the benchmark's 19.4%, and a −43.5% worst drawdown against
+        −55.2%. Both land at a higher Sharpe and Sortino than buy-and-hold, which is the more
+        durable claim here: the risk-adjusted edge is consistent across both settings, while the
+        raw-return edge is not.
+      </p>
+      <div class="callout">
+        <strong>The most important number in the table is 77%</strong>
+        Both configurations are only invested about three-quarters of the time — the regime
+        filter holds cash for the remaining quarter. Matching a fully-invested benchmark's return
+        while sitting out a quarter of the period is where the drawdown and volatility advantages
+        come from. It is also the main source of risk in the other direction: the filter is a
+        200-day moving average, so it exits well after a top and re-enters well after a bottom.
+      </div>
+
+      <h3 id="results-risk">Risk profile</h3>
+      <p>
+        The benchmark's worst drawdown is the 2007-10 → 2009-03 financial crisis, −55.2%
+        peak-to-trough. Neither strategy configuration avoids that period, but both cut it
+        materially (−46.7% and −43.5%). Their <em>own</em> worst drawdowns land in the dot-com
+        unwind instead — mid-2000 for <code>top_n=5</code>, and a drawdown running into 2003 for
+        <code>top_n=10</code> — which is the expected failure mode for momentum: a sharp
+        rotation out of the exact names that had been leading.
+      </p>
+      <p>
+        Turnover of ~30x a year is high, and is the single biggest caveat on these numbers. It is
+        driven by the rebalance rules on <a href="#slide-rebalance">slide&nbsp;11</a> — any
+        change in top-N membership triggers an immediate rebalance, and every regime flip
+        liquidates and later rebuilds the entire book. <strong>These results model no commissions,
+        no spread, and no slippage.</strong> At this turnover, realistic transaction costs would
+        take a real bite out of the return column; see <a href="#results-limits">Limitations</a>.
+      </p>
+
+      <h3 id="results-method">How these were produced</h3>
+      <ul>
+        <li><strong>Universe:</strong> <code>index:sp500_point_in_time</code> — actual month-by-month S&amp;P&nbsp;500 membership, so no survivorship or look-ahead bias in the candidate list (<a href="#slide-universe">slide&nbsp;2</a>).</li>
+        <li><strong>Data:</strong> daily OHLCV via <code>yfinance</code>, cached in <code>cache_data/prices.parquet</code>. Price history is loaded for every ticker that was ever a member, ~779 of which have retrievable data. Prices are auto-adjusted for both splits and dividends, so strategy and benchmark are compared on a consistent total-return basis.</li>
+        <li><strong>Benchmark:</strong> SPY, measured over the strategy's own date range.</li>
+        <li><strong>Starting capital:</strong> $100,000. Orders are market orders filled at the next bar's open.</li>
+        <li><strong>Everything else:</strong> stock defaults — <code>lookbacks: [60, 120, 252]</code>, <code>vol_lookback: 126</code>, <code>skewness_lookback: 90</code>, <code>fip_lookback: 252</code>, <code>ts_mom_lookback: 200</code>, <code>regime_ma_period: 200</code>, weights <code>0.5 / 0.5 / 0.5</code>, <code>rebalance_frequency: monthly</code>, <code>sizing_method: inverse_vol</code>.</li>
+      </ul>
+      <p>Reproduce either run directly:</p>
+      <pre><code>uv run momentum run configs/sp500_pit_1997_2026_n5.yaml  --output tearsheet_n5.html
+uv run momentum run configs/sp500_pit_1997_2026_n10.yaml --output tearsheet_n10.html</code></pre>
+      <p style="margin-bottom:0">
+        Each writes a full <code>quantstats</code> tearsheet with a Summary Statistics block on
+        top. Expect roughly 10–15 minutes per run: ~700 price feeds across ~7,200 trading days is
+        genuinely a lot of per-bar computation, and almost none of the wall time is data fetching
+        once the cache is warm.
+      </p>
+
+      <h3 id="results-limits">Limitations — read before quoting any number above</h3>
+      <div class="callout gotcha">
+        <strong>1. No transaction costs, spread, or slippage are modeled</strong>
+        At ~30x annual turnover this is the most consequential omission on the page. A few basis
+        points per trade compounds into a material drag over 28 years.
+      </div>
+      <div class="callout gotcha">
+        <strong>2. Constituent history is reconstructed, not vendor-supplied</strong>
+        Monthly membership comes from a community-maintained reconstruction of the index, not an
+        authoritative point-in-time vendor feed. It is dramatically better than applying today's
+        list to the past, but it is not audited data, and the pre-2001 portion is the least
+        reliable stretch.
+      </div>
+      <div class="callout gotcha">
+        <strong>3. Roughly a third of historical constituents have no retrievable price data</strong>
+        Companies that were delisted, acquired, or went bankrupt long ago frequently return
+        nothing from Yahoo Finance. Those names are skipped, which means the deepest failures in
+        the index's history are under-represented in the candidate pool — a residual bias
+        pointing in the optimistic direction.
+      </div>
+      <div class="callout gotcha">
+        <strong>4. Two settings on one history is not a validated strategy</strong>
+        These are two runs over a single (long) period. Nothing here has been walk-forward
+        validated or tested out-of-sample on another index or market, and no parameter on
+        <a href="#slide-momentum">slides&nbsp;5–10</a> has been swept. Treat the table as a
+        measurement of this implementation, not as evidence about momentum investing generally.
+      </div>
+      <div class="callout gotcha">
+        <strong>5. Cash earns nothing while the regime filter is out of the market</strong>
+        For 23% of the period the book sits in cash at a 0% risk-free rate. Over 1998–2026 —
+        which includes stretches of 5%+ short rates — a real implementation parking that cash in
+        T-bills would have earned meaningfully more than these figures credit it with. This one
+        biases the results <em>pessimistically</em>, unlike the others on this list.
+      </div>
+    </section>
+
+    <!-- ============================================================ -->
     <section id="architecture">
-      <h2><span class="num">2</span>Code Structure &amp; How to Run It</h2>
+      <h2><span class="num">3</span>Code Structure &amp; How to Run It</h2>
       <p class="section-intro">
         The package was refactored from a single 300+ line script
         (<code>raw/main.py</code>, kept for reference) into a proper <code>src</code>-layout
@@ -832,10 +968,10 @@
 │   └── default.yaml          <span class="comment"># sample run config</span>
 ├── <span class="dir">src/momentum/</span>
 │   ├── config.py              <span class="comment"># RunConfig / StrategyConfig dataclasses + YAML loader</span>
-│   ├── universe.py            <span class="comment"># static list or dynamic index-constituent resolution</span>
+│   ├── universe.py            <span class="comment"># static, live index, or point-in-time constituent resolution</span>
 │   ├── data.py                <span class="comment"># yfinance fetch + local parquet cache</span>
 │   ├── scoring.py              <span class="comment"># pure math: momentum, FIP, skewness, combined score, inverse-vol</span>
-│   ├── indicators.py           <span class="comment"># backtrader Indicator wrappers around scoring.py</span>
+│   ├── indicators.py           <span class="comment"># backtrader Indicator wrappers (kept; strategy computes inline)</span>
 │   ├── strategy.py             <span class="comment"># MomentumStrategy(bt.Strategy)</span>
 │   ├── backtest.py             <span class="comment"># builds Cerebro, wires feeds + strategy, extracts returns</span>
 │   ├── reporting.py            <span class="comment"># quantstats tearsheet generation</span>
@@ -852,14 +988,9 @@
           <td>Zero <code>backtrader</code> imports — importable and unit-testable standalone. This is the module to point to when asked "what's actually novel here."</td>
         </tr>
         <tr>
-          <td><code>indicators.py</code></td>
-          <td><code>RollingSkewness</code> and <code>FrogInThePan</code>, thin <code>bt.Indicator</code> subclasses</td>
-          <td>Each just windows the price series and calls into <code>scoring.py</code> per bar — no math lives here.</td>
-        </tr>
-        <tr>
           <td><code>strategy.py</code></td>
-          <td><code>MomentumStrategy(bt.Strategy)</code> — the regime filter, trend filter, scoring loop, and order placement</td>
-          <td>The only place that touches <code>backtrader</code>'s per-bar <code>next()</code> lifecycle and broker/position APIs. Also the only place that <em>can</em> track turnover — <code>notify_order()</code> accumulates every filled order's traded value, since that information doesn't exist in a returns series alone.</td>
+          <td><code>MomentumStrategy(bt.Strategy)</code> — the regime filter, trend filter, scoring loop, position sizing, and order placement</td>
+          <td>The only place that touches <code>backtrader</code>'s per-bar <code>next()</code> lifecycle and broker/position APIs. Per-stock signals are computed on demand from raw price windows inside <code>next()</code> rather than as registered indicators, which keeps each stock's readiness independent of every other stock's. Also the only place that <em>can</em> track turnover (<code>notify_order()</code> accumulates filled traded value) and daily portfolio value (<code>value_history</code>), neither of which is recoverable from a returns series alone.</td>
         </tr>
         <tr>
           <td><code>config.py</code></td>
@@ -869,17 +1000,17 @@
         <tr>
           <td><code>universe.py</code></td>
           <td>Resolves a ticker list from config</td>
-          <td><code>source: static</code> (inline list) or <code>source: index:sp500</code> (live Wikipedia scrape).</td>
+          <td>Three sources: <code>static</code> (inline list), <code>index:sp500</code> (live Wikipedia scrape of today's members), and <code>index:sp500_point_in_time</code>, which returns every ticker ever in the index plus a month-end → member-set lookup so the strategy can restrict each rebalance to the membership that actually existed then (<a href="#slide-universe">slide&nbsp;2</a>).</td>
         </tr>
         <tr>
           <td><code>data.py</code></td>
           <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by <strong>one combined, git-tracked parquet file</strong> (<code>cache_data/prices.parquet</code>) instead of per-ticker files; also caches shares outstanding (<code>cache_data/shares_outstanding.parquet</code>) for cap-weighted sizing</td>
-          <td>Long-format store (<code>ticker</code>, <code>Date</code>, OHLCV columns), loaded once per process and reused for every ticker in the run. Coverage-based, not time-based: a ticker's rows are reused only if their date range already covers the request; otherwise it downloads, merges, and rewrites the whole file. Checked into git specifically so a fresh clone has working data for any ticker/range someone has already fetched, with no network call. Also flattens the MultiIndex columns <code>yfinance</code> sometimes returns. Shares outstanding is a single current snapshot per ticker (via <code>yfinance</code>'s <code>fast_info</code>), used as <code>shares × close(t)</code> to approximate historical market cap — cheap, but technically uses information not actually available on past rebalance dates.</td>
+          <td>Long-format store (<code>ticker</code>, <code>Date</code>, OHLCV columns), loaded once per process and reused for every ticker in the run. Coverage-based, not time-based: a ticker's rows are reused only if their date range already covers the request; otherwise it downloads, merges, and rewrites the whole file. Checked into git specifically so a fresh clone has working data for any ticker/range someone has already fetched, with no network call. Tickers Yahoo has no data for at all (long-delisted names, dead symbols) are recorded in <code>cache_data/no_data_tickers.parquet</code> so they aren't re-attempted every run — with ~1,200 historical constituents, ~429 of which are permanently unavailable, that alone saves minutes per run. Shares outstanding is a single current snapshot per ticker (via <code>fast_info</code>), used as <code>shares × close(t)</code> to approximate historical market cap — cheap, but technically uses information not available on past rebalance dates.</td>
         </tr>
         <tr>
           <td><code>backtest.py</code></td>
-          <td>Orchestration: builds <code>Cerebro</code>, adds benchmark as <code>datas[0]</code> and universe as <code>datas[1:]</code>, runs, extracts the <code>TimeReturn</code> analyzer</td>
-          <td>Missing per-ticker data is logged and skipped, not fatal; missing benchmark data <em>is</em> fatal. Also validates every feed has enough trading days for the configured lookbacks (<code>_min_required_bars</code>) <em>before</em> handing it to <code>backtrader</code> — a too-short benchmark raises a clear error, a too-short ticker (e.g. a recent IPO/spinoff) is logged and skipped, same as missing data.</td>
+          <td>Orchestration: builds <code>Cerebro</code>, adds benchmark as <code>datas[0]</code> and universe as <code>datas[1:]</code>, runs, and converts the strategy's recorded daily portfolio value into a returns series</td>
+          <td>Missing per-ticker data is logged and skipped, not fatal; missing benchmark data <em>is</em> fatal. Validates every feed has enough trading days for the configured lookbacks (<code>_min_required_bars</code>) before handing it to <code>backtrader</code>. Also aligns every ticker onto the benchmark's own trading-day calendar (<code>_align_to_calendar</code>) so all feeds are the same length regardless of listing date, and passes each ticker's real listing position to the strategy so a stock only becomes eligible once it has genuinely accumulated enough of its own history.</td>
         </tr>
         <tr>
           <td><code>reporting.py</code></td>
@@ -897,11 +1028,11 @@
       <div class="flow">
         <div class="flow-step"><div class="flow-dot">1</div><div class="flow-body"><b>CLI</b><span><code>momentum run configs/default.yaml</code> parses args and calls <code>load_config</code>.</span></div></div>
         <div class="flow-step"><div class="flow-dot">2</div><div class="flow-body"><b>config.py</b><span>YAML → validated <code>RunConfig</code> (dates, benchmark, universe spec, strategy params).</span></div></div>
-        <div class="flow-step"><div class="flow-dot">3</div><div class="flow-body"><b>universe.py</b><span>Resolves the ticker list (static or live index scrape).</span></div></div>
+        <div class="flow-step"><div class="flow-dot">3</div><div class="flow-body"><b>universe.py</b><span>Resolves the ticker list (static, live index scrape, or point-in-time membership).</span></div></div>
         <div class="flow-step"><div class="flow-dot">4</div><div class="flow-body"><b>data.py</b><span>Loads OHLCV per ticker + benchmark, hitting the local parquet cache first.</span></div></div>
-        <div class="flow-step"><div class="flow-dot">5</div><div class="flow-body"><b>backtest.py</b><span>Builds <code>Cerebro</code>, adds all feeds, attaches <code>MomentumStrategy</code> with config params, runs it.</span></div></div>
-        <div class="flow-step"><div class="flow-dot">6</div><div class="flow-body"><b>strategy.py / indicators.py</b><span>Per-bar: regime check → trend filter → scoring → ranking → inverse-vol sizing → orders.</span></div></div>
-        <div class="flow-step"><div class="flow-dot">7</div><div class="flow-body"><b>backtest.py</b><span>Pulls the <code>TimeReturn</code> analyzer's daily portfolio returns and the benchmark's returns.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">5</div><div class="flow-body"><b>backtest.py</b><span>Aligns every feed to the benchmark calendar, builds <code>Cerebro</code>, attaches <code>MomentumStrategy</code> with config params, runs it.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">6</div><div class="flow-body"><b>strategy.py</b><span>Per-bar: regime check → membership check → trend filter → scoring → ranking → inverse-vol sizing → orders.</span></div></div>
+        <div class="flow-step"><div class="flow-dot">7</div><div class="flow-body"><b>backtest.py</b><span>Turns the strategy's recorded daily portfolio value into a returns series, alongside the benchmark's.</span></div></div>
         <div class="flow-step"><div class="flow-dot">8</div><div class="flow-body"><b>reporting.py</b><span><code>quantstats</code> renders a benchmark-relative HTML tearsheet.</span></div></div>
         <div class="flow-step"><div class="flow-dot">9</div><div class="flow-body"><b>CLI</b><span>Prints the tearsheet path.</span></div></div>
       </div>
@@ -931,23 +1062,25 @@ uv run pytest</code></pre>
 
       <h3 id="running-sp500">Running against the S&amp;P 500 universe</h3>
       <p>
-        <code>configs/default.yaml</code> ships with a static ~140-ticker universe. To backtest
-        against the <em>current</em> S&amp;P&nbsp;500 constituents instead, set
-        <code>universe.source</code> to <code>index:sp500</code> — <code>universe.py</code>
-        resolves this by scraping the live constituent table from Wikipedia at run time, so no
-        ticker list needs to be maintained by hand.
+        <code>configs/default.yaml</code> ships with a static ~140-ticker universe. For an
+        S&amp;P&nbsp;500 backtest, set <code>universe.source</code> to either
+        <code>index:sp500</code> (today's members, scraped from Wikipedia at run time) or
+        <code>index:sp500_point_in_time</code> (actual historical membership — what
+        <a href="#results">§2</a>'s results use, and what you want for anything longer than a
+        year or two):
       </p>
       <pre><code>benchmark: SPY
-start_date: "2022-01-01"
-end_date: "2024-12-31"
+start_date: "1997-01-01"
+end_date: "2026-06-30"
 cache_dir: cache_data
 
 universe:
-  source: index:sp500
+  source: index:sp500_point_in_time
+  constituents_file: cache_data/sp500_constituents_monthly.parquet
 
 strategy:
   lookbacks: [60, 120, 252]
-  top_n: 5
+  top_n: 10
   vol_lookback: 126
   skewness_lookback: 90
   fip_lookback: 252
@@ -956,45 +1089,35 @@ strategy:
   momentum_weight: 0.5
   fip_weight: 0.5
   skewness_penalty: 0.5
-  rebalance_frequency: monthly</code></pre>
-      <p>Saved as <code>configs/sp500.yaml</code>, run it the same way as any other config:</p>
-      <pre><code>uv run momentum run configs/sp500.yaml --output tearsheet_sp500.html</code></pre>
+  rebalance_frequency: monthly
+  sizing_method: inverse_vol</code></pre>
+      <p>Shipped as <code>configs/sp500_pit_1997_2026_n10.yaml</code>; run it like any other config:</p>
+      <pre><code>uv run momentum run configs/sp500_pit_1997_2026_n10.yaml --output tearsheet.html</code></pre>
       <div class="callout">
-        <strong>Verified: ~3 minutes end-to-end, 493/500 tickers used</strong>
-        This exact config was run against the live S&amp;P&nbsp;500 constituent list, with three
-        years of history for all ~500 tickers already sitting in the committed
-        <code>cache_data/prices.parquet</code> — most of the ~3&nbsp;minute wall time is the
-        backtest's own per-bar computation across ~493 stocks, not data fetching. 7 tickers were
-        skipped automatically, each logged as a warning rather than failing the run: a few no
-        longer resolve on Yahoo Finance (ticker changes since the snapshot), and a few
-        recently-listed spinoffs/IPOs (e.g. <code>GEV</code>, <code>SOLV</code>, <code>RDDT</code>)
-        don't yet have the ~253 trading days of history the default lookbacks require — see the
-        <code>_min_required_bars</code> check in <code>backtest.py</code>, added specifically to
-        turn that case into a clean skip instead of a crash. On a fresh clone with no cache at
-        all, expect this same run to take noticeably longer the first time, purely on data-fetch
-        time — and whatever it fetches gets added to <code>cache_data/prices.parquet</code> for
-        next time.
+        <strong>What to expect on the full historical run</strong>
+        ~1,200 tickers are resolved, ~429 of which Yahoo has no data for at all (long-dead
+        symbols) and are skipped from a cached list without a network call; ~740 make it in as
+        feeds after the minimum-history filter. Wall time is 10–15 minutes with a warm cache,
+        almost entirely per-bar computation across ~700 feeds &times; ~7,200 trading days rather
+        than data fetching. A fresh clone with no cache will be substantially slower the first
+        time, and whatever it fetches is written back to <code>cache_data/prices.parquet</code>.
       </div>
-
       <p>
-        Every run now writes a <strong>Summary Statistics</strong> block into the top of the
-        tearsheet HTML itself (see <code>reporting.py</code> in the module reference above). The
-        full history of what those numbers looked like before and after each fix — plus every
-        parameter variation tried and why they were or weren't adopted — is written up as its own
-        section: <a href="#research">§3 The Research Process</a>.
+        Every run writes a <strong>Summary Statistics</strong> block into the top of the
+        tearsheet HTML (see <code>reporting.py</code> in the module reference above), covering
+        backtest period, absolute and relative return, CAGR, Sharpe, and annualized turnover,
+        with the benchmark measured over the strategy's own date range.
       </p>
       <ul>
-        <li>Needs network access to both <code>en.wikipedia.org</code> (constituent scrape) and Yahoo Finance (price data).</li>
-        <li>A handful of tickers will fail to fetch or have too little history; both cases are logged and skipped rather than aborting the run.</li>
+        <li>Needs network access to Yahoo Finance for any price data not already cached, and to <code>en.wikipedia.org</code> only for the <code>index:sp500</code> (live) source.</li>
+        <li>Tickers that fail to fetch or have too little history are logged and skipped rather than aborting the run.</li>
         <li>
           <strong>Don't shrink the date range below ~14 months</strong> to "test faster" — the
           default <code>fip_lookback: 252</code> needs 253 trading days of history per ticker,
-          and a single calendar year only has ~251. A too-short range now raises a clear
-          <code>ValueError</code> naming the shortfall instead of crashing deep inside
-          <code>backtrader</code> with an opaque <code>IndexError</code> (a real bug this guide's
-          own S&amp;P&nbsp;500 testing turned up — fixed and covered by
-          <code>test_backtest_smoke.py</code>). To iterate faster, shrink the <em>universe</em>
-          (fewer tickers) instead of the date range.
+          and a single calendar year only has ~251. A too-short range raises a clear
+          <code>ValueError</code> naming the shortfall instead of failing deep inside
+          <code>backtrader</code>. To iterate faster, shrink the <em>universe</em> (fewer
+          tickers) instead of the date range.
         </li>
       </ul>
 
@@ -1004,9 +1127,9 @@ strategy:
         <tr><td><code>benchmark</code></td><td>Ticker used for the regime filter and as the tearsheet's comparison series</td><td><code>SPY</code></td></tr>
         <tr><td><code>start_date</code> / <code>end_date</code></td><td>Backtest date range</td><td><code>2022-01-01</code> → <code>2024-12-31</code></td></tr>
         <tr><td><code>cache_dir</code></td><td>Directory holding the combined, git-tracked <code>prices.parquet</code> cache</td><td><code>cache_data</code></td></tr>
-        <tr><td><code>universe.source</code></td><td><code>static</code> or <code>index:sp500</code></td><td><code>static</code>, ~140 tickers</td></tr>
+        <tr><td><code>universe.source</code></td><td><code>static</code>, <code>index:sp500</code>, or <code>index:sp500_point_in_time</code> (the last also needs <code>universe.constituents_file</code>)</td><td><code>static</code>, ~140 tickers</td></tr>
         <tr><td><code>strategy.lookbacks</code></td><td>Momentum blend horizons (trading days)</td><td><code>[60, 120, 252]</code></td></tr>
-        <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>5</code></td></tr>
+        <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>10</code></td></tr>
         <tr><td><code>strategy.vol_lookback</code></td><td>Window for the inverse-vol sizing volatility</td><td><code>126</code></td></tr>
         <tr><td><code>strategy.skewness_lookback</code></td><td>Window for the skewness signal</td><td><code>90</code></td></tr>
         <tr><td><code>strategy.fip_lookback</code></td><td>Window for the FIP signal</td><td><code>252</code></td></tr>
@@ -1014,7 +1137,7 @@ strategy:
         <tr><td><code>strategy.regime_ma_period</code></td><td>SMA period for the benchmark regime filter</td><td><code>200</code></td></tr>
         <tr><td><code>strategy.momentum_weight</code> / <code>fip_weight</code> / <code>skewness_penalty</code></td><td>Combined-score weights</td><td><code>0.5 / 0.5 / 0.5</code></td></tr>
         <tr><td><code>strategy.rebalance_frequency</code></td><td><code>null</code> (membership-change only) or <code>"monthly"</code></td><td><code>monthly</code></td></tr>
-        <tr><td><code>strategy.sizing_method</code></td><td><code>"inverse_vol"</code> or <code>"cap_weighted"</code> (tested, measured worse — see <a href="#exploring-cap-weighted">§3 Exploring cap-weighted sizing</a>)</td><td><code>inverse_vol</code></td></tr>
+        <tr><td><code>strategy.sizing_method</code></td><td><code>"inverse_vol"</code> or <code>"cap_weighted"</code> (market-cap tilt on top of the same inverse-vol formula — see <a href="#slide-sizing">slide&nbsp;10</a>)</td><td><code>inverse_vol</code></td></tr>
       </table>
 
       <h3 id="testing">Testing strategy</h3>
@@ -1024,266 +1147,30 @@ strategy:
         <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. Also covers the two insufficient-history cases: a too-short benchmark raises <code>ValueError</code>, a too-short ticker is logged and skipped. This is the regression guard for cross-module wiring.</li>
         <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
       </ul>
-      <p>All 54 tests pass with <code>uv run pytest</code>; no test hits the network.</p>
-    </section>
-
-    <!-- ============================================================ -->
-    <section id="research">
-      <h2><span class="num">3</span>The Research Process</h2>
-      <p class="section-intro">
-        The S&amp;P&nbsp;500 numbers elsewhere in this guide didn't come from one run — they came
-        from a chain of "why is this underperforming, and is there actually something wrong here"
-        questions, each answered by changing exactly one thing and re-running the identical
-        backtest. This section is that chain, in order, with the real before/after numbers for
-        every step — including the steps that didn't pan out. <strong>The order matters as much as
-        any single number in it</strong>: it's the difference between fixing something that was
-        genuinely broken and quietly tuning a strategy until it flatters one dataset.
-      </p>
-
-      <h3 id="research-at-a-glance">The investigation, at a glance</h3>
-      <p>
-        Five questions were asked and answered, each with its own real backtest run. They fall
-        into three different categories, and the category is what determines whether a result gets
-        acted on:
-      </p>
-      <div class="table-scroll" style="overflow-x:auto">
-      <table class="worked-table">
-        <tr><th>#</th><th>Question</th><th>Category</th><th class="num">Measured result</th><th>Decision</th></tr>
-        <tr class="winner">
-          <td>1</td>
-          <td>Why does momentum score raw price differences?</td>
-          <td>Bug fix</td>
-          <td class="num">Sharpe −0.03→0.08<br>CAGR −0.7%→+0.3%</td>
-          <td>Fixed, kept</td>
-        </tr>
-        <tr class="winner">
-          <td>2</td>
-          <td>Why does sizing use price-level stdev?</td>
-          <td>Bug fix</td>
-          <td class="num">Sharpe 0.08→0.28<br>CAGR +0.3%→+1.4%</td>
-          <td>Fixed, kept</td>
-        </tr>
-        <tr>
-          <td>3</td>
-          <td>Should upside moves count as "risk"?</td>
-          <td>Refinement</td>
-          <td class="num">Sharpe 0.28→0.28<br>CAGR +1.4%→+1.5%</td>
-          <td>Kept (sounder logic, harmless) — <strong>not</strong> credited as an improvement</td>
-        </tr>
-        <tr>
-          <td>4</td>
-          <td>Is <code>top_n=5</code> too concentrated?</td>
-          <td>Exploratory parameter check</td>
-          <td class="num">Best at 10 (Sharpe 0.53); non-monotonic across 5/10/15/50</td>
-          <td><strong>Not adopted</strong> — default stays 5</td>
-        </tr>
-        <tr>
-          <td>5</td>
-          <td>Would market-cap-weighted sizing help?</td>
-          <td>Refinement</td>
-          <td class="num">Sharpe 0.28→0.16<br>CAGR +1.5%→+0.8%</td>
-          <td><strong>Not adopted</strong> — measured worse, kept as an option only</td>
-        </tr>
-      </table>
-      </div>
-      <div class="methodology-note">
-        <strong>The one question that separates rows 1-2 from row 4: would you make this change without looking at the result?</strong>
-        Rows 1 and 2 are defensible on their own terms before any measurement — a raw price
-        difference isn't momentum in any standard sense, and price-level standard deviation isn't
-        volatility (volatility means how much something bounces around in percentage terms, not
-        in raw dollars) in any standard sense. The backtest result is <em>supporting evidence</em>
-        for a change already justified by the code being wrong, not the reason for the change.
-        Rows 3 and 5 are similar in spirit (downside deviation and cap-weighting are both
-        defensible risk/allocation choices on independent grounds) but the backtest didn't
-        support either — row 3 came back neutral, row 5 came back worse. Both are reported
-        exactly as measured rather than quietly dropped or spun positive. A negative result for a
-        reasonable idea is still useful: it closes off a plausible hypothesis instead of leaving it
-        as untested speculation someone else might reach for later.
-        <br><br>
-        Row 4 fails the test: the <em>only</em> reason to prefer <code>top_n=10</code> is that it
-        scored best among four values tried on one historical window. That's not a defect in the
-        code, it's a trial-and-error parameter search with a sample size of four candidates and
-        roughly three non-overlapping years of data — nowhere near enough to tell a genuinely
-        better setting apart from a lucky one. Acting on it would be the textbook <strong>overfitting</strong>
-        mistake this guide keeps coming back to: optimizing a setting against the exact data used
-        to judge it, the equivalent of "tuning" a study plan by checking it against the answer key.
-        The discipline is to run the check, report it honestly, and not act on it without much
-        stronger evidence (multiple, non-overlapping historical periods; ideally a different
-        universe too).
-      </div>
-
-      <h3 id="research-steps">Results for each portfolio size (top_n)</h3>
-      <p>
-        Two real bugs were found and fixed along the way — see the "investigation at a glance"
-        table above for exactly what they were and their measured before/after impact. Once fixed,
-        the natural next question was whether the number of stocks held at once
-        (<code>top_n</code>, 5 by default) mattered. Standard diversification research suggests it
-        takes roughly 20-30 stocks to diversify away most single-stock risk, so 5 is a genuinely
-        concentrated bet. This was tested directly — four real runs of the identical (now-fixed)
-        config, varying only <code>top_n</code> with the default sizing method held fixed
-        (sizing method × <code>top_n</code> combinations are tested separately, two sections down):
-      </p>
-      <div class="table-scroll" style="overflow-x:auto">
-      <table class="worked-table">
-        <tr><th>top_n</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return (absolute)</th></tr>
-        <tr><td>5 (documented default)</td><td class="num">+1.5%</td><td class="num">0.28</td><td class="num">1.73x</td><td class="num">+4.4%</td></tr>
-        <tr class="winner"><td>10</td><td class="num">+2.8%</td><td class="num">0.53</td><td class="num">2.80x</td><td class="num">+8.6%</td></tr>
-        <tr><td>15</td><td class="num">+1.5%</td><td class="num">0.35</td><td class="num">2.29x</td><td class="num">+4.5%</td></tr>
-        <tr><td>50</td><td class="num">+0.2%</td><td class="num">0.07</td><td class="num">1.90x</td><td class="num">+0.5%</td></tr>
-        <tr><td>Benchmark (SPY)</td><td class="num">+8.8%</td><td class="num">0.57</td><td>—</td><td class="num">+28.7%</td></tr>
-      </table>
-      </div>
-      <div class="methodology-note">
-        <strong>The best-looking number here was deliberately not adopted — and that's the point</strong>
-        <code>top_n=10</code> looks the best by a real margin (Sharpe 0.53, nearly matching the
-        benchmark's 0.57), and <code>top_n=50</code> is clearly worse — consistent with signal
-        dilution: pulling in the 50th-ranked momentum name is pulling in a much weaker signal than
-        the 10th-ranked one. But the shape across all four points — up from 5 to 10, back down at
-        15, down further at 50 — is exactly what you'd expect from <strong>noise on a single
-        backtest window</strong>, not a clean, steadily-improving "more diversification is better"
-        or "more concentration is better" relationship. With ~3 non-overlapping years of monthly
-        rebalances in this window, four candidate values isn't nearly enough data to tell a
-        genuinely better parameter apart from a lucky one.
-        <br><br>
-        <code>top_n</code> was <strong>not</strong> changed as a result of this table.
-        <code>top_n=5</code> remains the documented default. Picking <code>top_n=10</code> because
-        it scored best here would be the exact overfitting this guide has warned about throughout
-        — a setting chosen because it happens to fit one historical window, with no evidence it
-        would hold up on a different one. This table exists to show the check was actually done,
-        not to justify a change.
-      </div>
-
-      <h3 id="exploring-cap-weighted">Exploring cap-weighted sizing — a reasoned refinement, measured worse</h3>
-      <p>
-        A follow-up idea: weight the top-N by <em>market cap × inverse volatility</em> instead of
-        inverse volatility alone — for the same risk, tilt toward larger, more liquid, more
-        established companies (think Apple or Microsoft rather than a smaller, less-traded name).
-        Independently defensible (reduces exposure to small-cap data/liquidity quirks), so unlike
-        the <code>top_n</code> sweep this is a <em>refinement</em>, not pure parameter tuning — see
-        the "investigation at a glance" table above for that distinction. It required new data the
-        pipeline didn't have: shares outstanding, fetched once per ticker via <code>yfinance</code>'s
-        <code>fast_info</code> and cached in <code>cache_data/shares_outstanding.parquet</code>,
-        combined with each day's already-cached close price to approximate market cap at every
-        rebalance (<code>scoring.cap_weighted_inverse_vol_weights()</code>, selectable via
-        <code>strategy.sizing_method: cap_weighted</code>). The comparison below holds
-        <code>top_n</code> fixed at the default of 5 — it isolates the sizing-method variable the
-        same way the table above isolated <code>top_n</code>. Neither row here beats the
-        benchmark; the combination that does (<code>cap_weighted</code> at <code>top_n=10</code>)
-        is in the grid two sections down.
-      </p>
-      <div class="table-scroll" style="overflow-x:auto">
-      <table class="worked-table">
-        <tr><th>Sizing method (top_n=5)</th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Turnover</th><th class="num">Total return (absolute)</th></tr>
-        <tr class="winner"><td>inverse_vol + downside deviation (current default)</td><td class="num">+1.5%</td><td class="num">0.28</td><td class="num">1.73x</td><td class="num">+4.4%</td></tr>
-        <tr><td>cap_weighted (tested)</td><td class="num">+0.8%</td><td class="num">0.16</td><td class="num">1.74x</td><td class="num">+2.4%</td></tr>
-      </table>
-      </div>
-      <div class="methodology-note">
-        <strong>Tested honestly, measured worse, not adopted</strong>
-        Every metric got worse, not better: CAGR +1.5%→+0.8%, Sharpe 0.28→0.16. A plausible
-        explanation — the top-N is already picked purely by momentum score, so cap-weighting only
-        changes sizing <em>among</em> those 5 names, and within a random draw of 5 momentum
-        winners, market caps can differ by 10–50x; tilting further toward whichever happens to be
-        the biggest company concentrates capital into fewer effective names without adding signal.
-        That's a plausible-sounding explanation after the fact, not something to trust more than
-        the number itself.
-        <br><br>
-        <code>sizing_method</code> stays <code>inverse_vol</code> by default.
-        <code>cap_weighted</code> remains in the codebase as a selectable option — implemented,
-        tested, and honestly documented as measured-worse-here, not as a recommendation. Reporting
-        a negative result is exactly as valuable as reporting a positive one: it closes off a
-        plausible-sounding idea instead of leaving it as untested speculation.
-      </div>
-
-      <h3 id="exploring-grid">Combining both: sizing method × top_n</h3>
-      <p>
-        A natural next question, once both the <code>top_n</code> sweep and the cap-weighted
-        sizing test existed separately: what happens if you combine them? All 8 combinations of
-        the 2 sizing methods and 4 <code>top_n</code> values were run:
-      </p>
-      <div class="table-scroll" style="overflow-x:auto">
-      <table class="worked-table">
-        <tr><th>top_n</th><th class="num">inverse_vol Sharpe</th><th class="num">inverse_vol CAGR</th><th class="num">cap_weighted Sharpe</th><th class="num">cap_weighted CAGR</th></tr>
-        <tr><td>5</td><td class="num">0.28</td><td class="num">+1.5%</td><td class="num">0.16</td><td class="num">+0.8%</td></tr>
-        <tr class="winner"><td>10</td><td class="num">0.53</td><td class="num">+2.8%</td><td class="num">0.65</td><td class="num">+3.8%</td></tr>
-        <tr><td>15</td><td class="num">0.35</td><td class="num">+1.5%</td><td class="num">0.30</td><td class="num">+1.4%</td></tr>
-        <tr><td>50</td><td class="num">0.07</td><td class="num">+0.2%</td><td class="num">0.21</td><td class="num">+0.8%</td></tr>
-      </table>
-      </div>
-      <div class="methodology-note">
-        <strong>The best cell in the whole grid beats the benchmark's Sharpe ratio — and it's still not adopted</strong>
-        <code>cap_weighted</code> at <code>top_n=10</code> scores a Sharpe ratio of <strong>0.65</strong>,
-        higher than the benchmark's 0.57. That's a genuinely striking number, and it's tempting to
-        read it as "the real answer was hiding in the combination all along." Resist that reading,
-        for a reason that goes beyond the usual "one window" caution:
-        <br><br>
-        <strong>Sizing method doesn't change which stocks get picked — only how much money goes
-        into each one.</strong> Stock selection is pure momentum score, identical regardless of
-        <code>sizing_method</code>. So <code>inverse_vol</code> and <code>cap_weighted</code> at
-        the same <code>top_n</code> are re-weighting the <em>exact same stocks</em> — they aren't
-        two independent trials, they're one stock-picking decision viewed through two different
-        weighting lenses. The real independent variable here is still just the 4 <code>top_n</code>
-        values; both weighting lenses agree that whatever got picked at <code>top_n=10</code> was
-        the best of those 4 draws. That's closer to the same signal showing up twice than to two
-        separate confirmations — testing 8 combinations produces the appearance of more evidence
-        without actually providing it. Combined with the original <code>top_n</code> sweep's own
-        small-sample caution, this multiplies the risk of mistaking a lucky historical draw for a
-        real edge, rather than multiplying the evidence for one.
-        <br><br>
-        <code>sizing_method: inverse_vol</code> and <code>top_n: 5</code> remain the defaults. No
-        combination from this grid was adopted.
-      </div>
-
-      <h3 id="research-qa">Questions this research process might prompt</h3>
-      <div class="qa">
-        <p class="q">You mentioned momentum and sizing used to have unit bugs — what happened when you fixed them?</p>
-        <p class="a">Fixed one at a time and re-ran the exact same S&amp;P&nbsp;500 config after each (see the step-by-step table above). Momentum → percentage return: Sharpe −0.03 → 0.08, CAGR −0.7% → +0.3%. Sizing → return-based volatility, on top of that: Sharpe 0.08 → 0.28, CAGR +0.3% → +1.4%. Both real, measured, non-trivial improvements — and still ~7.4 points of CAGR behind the benchmark.</p>
-      </div>
-      <div class="qa">
-        <p class="q">Then you tried downside deviation for sizing — was that a fix too?</p>
-        <p class="a">No, and that distinction matters. It was a <em>refinement</em>: full return stdev penalizes a stock for volatile up-days the same as volatile down-days, and downside deviation (same logic as the Sortino ratio) only counts the down-days as risk. Defensible on its own terms, but measured on the real backtest it made essentially no difference — Sharpe stayed at 0.28, CAGR moved +1.4%→+1.5%. Kept it anyway since it's arguably more correct and clearly not harmful, but didn't credit it as an improvement, because it isn't one.</p>
-      </div>
-      <div class="qa">
-        <p class="q">What about weighting positions by market cap instead of pure inverse volatility?</p>
-        <p class="a">Tried it — implemented <code>sizing_method: cap_weighted</code> (market cap × inverse volatility, using shares outstanding fetched and cached separately, combined with the already-cached close price), and it measured <em>worse</em> on the real backtest: Sharpe 0.28→0.16, CAGR +1.5%→+0.8%. It's a defensible idea on independent grounds (large-cap tilt reduces small-cap liquidity/data risk), same category as the downside-deviation refinement — but this one came back negative rather than neutral. Kept the code as a selectable option, reported the result honestly, didn't make it the default.</p>
-      </div>
-      <div class="qa">
-        <p class="q">You tested <code>top_n=10</code> and it scored better than the default of 5 — why not just change it?</p>
-        <p class="a">Because the only evidence for <code>top_n=10</code> is that it won a four-way comparison on the one historical window used to evaluate it — that's a trial-and-error parameter search with an effective sample size in the single digits, not a finding. The result was also non-monotonic (10 beat both 5 and 15, then 50 was clearly worse), which looks more like noise than a real relationship. Reported the check, didn't act on it.</p>
-      </div>
-      <div class="qa">
-        <p class="q">The cap_weighted + top_n=10 combination beat the benchmark's Sharpe ratio. Doesn't that change things?</p>
-        <p class="a">No — and explaining why is a better interview answer than the number itself. Sizing method only re-weights whichever stocks momentum already picked; it doesn't change the picks. So that result isn't 8 independent tests, it's roughly 4 (one per <code>top_n</code> value), each viewed through 2 weighting lenses that mostly agree with each other. A striking number from a search with an effectively small sample size is exactly the shape overfitting takes — it looks like a discovery and behaves like noise.</p>
-      </div>
-      <div class="qa">
-        <p class="q">Both known bugs are fixed and it's still losing to the benchmark by a lot. What now?</p>
-        <p class="a">Stop tuning parameters against this one backtest — that's overfitting to a single 2022–2024 window dressed up as "improvement," and it's exactly what this tool's non-goals rule out (<a href="#nongoals">§1</a>). The honest next steps are structural, not cosmetic: add transaction-cost/slippage modeling (turnover is measured at 1.73x/year now, so costs aren't negligible), add walk-forward validation across multiple periods before drawing any conclusion about the strategy itself, and separately note that 2022 was a documented difficult year for momentum strategies broadly — some of the remaining gap may be the market regime, not the code.</p>
-      </div>
-      <div class="qa">
-        <p class="q">How do you decide whether to act on a result like this in general?</p>
-        <p class="a">Ask whether the change is justified without looking at the backtest number. A raw price difference isn't momentum, and price-level stdev isn't volatility — those are true regardless of what any backtest says, so the backtest result is supporting evidence, not the reason. If the <em>only</em> justification is "it scored better on this data," treat it as a hypothesis that needs far more evidence (multiple non-overlapping periods, ideally a different universe) before acting on it, not a result to ship.</p>
-      </div>
+      <p>All 62 tests pass with <code>uv run pytest</code> in about 5 seconds; no test hits the network.</p>
     </section>
 
     <!-- ============================================================ -->
     <section id="interview">
-      <h2><span class="num">4</span>Interview Prep</h2>
+      <h2><span class="num">4</span>Design Notes</h2>
       <p class="section-intro">
-        The points below are the ones most likely to come up if someone probes "why is it built
-        this way" rather than just "what does it do." See <a href="#research">§3 The Research
-        Process</a> for the fix-vs-tune investigation itself.
+        The decisions below are the ones that aren't obvious from reading the code, plus the
+        behaviors most likely to surprise someone modifying it. Read this section if you're
+        about to change something; skip it if you just want to run a backtest.
       </p>
 
       <h3 id="decisions">Key design decisions</h3>
       <div class="card">
         <ul style="margin-bottom:0">
           <li><strong>Scoring math is framework-agnostic.</strong> <code>scoring.py</code> has zero <code>backtrader</code> imports specifically so the strategy's core logic can be unit tested in milliseconds, without a full backtest run.</li>
-          <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top&nbsp;5 for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
+          <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top-N for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
           <li><strong>Cache is one combined, git-tracked file, and coverage-based rather than time-based.</strong> <code>data.py</code> keeps every ticker's OHLCV history in a single <code>cache_data/prices.parquet</code> (long format: <code>ticker</code>, <code>Date</code>, OHLCV), checked into the repo so a fresh clone has working data for anything already fetched — no network call needed. A ticker's rows are reused only when their date range already covers what's requested, not on a TTL, so re-running the same backtest twice does zero network calls the second time either way.</li>
           <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
           <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
           <li><strong>Turnover has to be tracked at the trade level, not derived from returns.</strong> Every other headline stat (CAGR, Sharpe, total return) is a pure function of the returns series and comes straight from <code>quantstats</code>. Turnover needs actual traded dollar value, which only exists inside <code>backtrader</code>'s order lifecycle — hence <code>MomentumStrategy.notify_order()</code> accumulating it, threaded back through <code>run_backtest()</code>'s return value into <code>reporting.py</code>.</li>
-          <li><strong>Data-length validation added after a real bug.</strong> Testing the S&amp;P&nbsp;500 universe against a too-short date range crashed with a raw backtrader <code>IndexError</code> — the fix (<code>backtest.py::_min_required_bars</code>) validates every feed's length against the configured lookbacks upfront, converting that into either a clear error (benchmark) or a graceful skip (ticker), matching the existing missing-data philosophy rather than inventing a new one.</li>
+          <li><strong>Feed length is validated up front, then normalized.</strong> <code>_min_required_bars</code> rejects any feed too short to ever satisfy the configured lookbacks — a clear error for the benchmark, a logged skip for a ticker. Everything that survives is then reindexed onto the benchmark's trading-day calendar so all feeds share one clock, with each ticker's real listing date tracked separately to gate eligibility. Uniform feed lengths keep one stock's readiness from interacting with another's.</li>
+          <li><strong>Per-stock signals are computed inline, not registered as indicators.</strong> Momentum, FIP, skewness, volatility, and the trend SMA are all computed on demand inside <code>next()</code> from raw price windows. Registering hundreds of per-stock indicator objects instead would couple every stock's warmup to every other stock's, which is a poor fit for a universe whose members list changes over decades.</li>
+          <li><strong>The benchmark is measured over the strategy's own window.</strong> The strategy has no returns until its regime SMA warms up; comparing it against a benchmark measured from an earlier start date would silently hand the benchmark months of free return. <code>reporting.py</code> clips the benchmark to the strategy's date range before computing any comparison stat.</li>
         </ul>
       </div>
 
@@ -1293,19 +1180,18 @@ strategy:
         See <a href="#slide-skew">slide&nbsp;7</a> — the coefficient is added with a positive sign and a positive default weight.
       </div>
       <div class="callout gotcha">
-        <strong>2. Fixed: momentum used to be a raw price difference, not a percentage return</strong>
-        Was dollar-scale (<a href="#slide-combine">slide&nbsp;8</a> discusses the residual scale
-        gap vs. FIP/Skew); now a percentage return (<a href="#slide-momentum">slide&nbsp;5</a>).
-        Measured on the real S&amp;P&nbsp;500 backtest: Sharpe −0.03 → 0.08, CAGR −0.7% → +0.3%.
-        See the before/after worked example on <a href="#slide-example">slide&nbsp;12</a>.
+        <strong>2. The three score terms are summed without normalization</strong>
+        Equal 0.5 weights do not mean equal influence — skew's natural range is several times
+        wider than momentum's, so it moves the ranking more than its weight implies. See
+        <a href="#slide-combine">slide&nbsp;8</a>, and <a href="#slide-example">slide&nbsp;12</a>
+        for a concrete ranking flip caused by a 0.20 difference in skew.
       </div>
       <div class="callout gotcha">
-        <strong>3. Fixed: inverse-vol sizing used to use price-level standard deviation, not return volatility</strong>
-        Was price-level (<a href="#slide-sizing">slide&nbsp;10</a>) — low-priced names got
-        systematically larger weights regardless of actual day-to-day riskiness; now standard
-        deviation of daily returns. Measured on top of gotcha&nbsp;2's fix: Sharpe 0.08 → 0.28,
-        CAGR +0.3% → +1.4%. See the before/after sizing table on
-        <a href="#slide-example">slide&nbsp;12</a>.
+        <strong>3. Ranking and sizing deliberately disagree</strong>
+        The top-ranked name routinely receives the smallest allocation, because sizing is driven
+        purely by downside deviation and ignores the score entirely
+        (<a href="#slide-sizing">slide&nbsp;10</a>). That's intended, not a bug — but it surprises
+        people reading a position list for the first time.
       </div>
       <div class="callout gotcha">
         <strong>4. Sizing uses a 99%-of-value buffer</strong>
@@ -1317,9 +1203,15 @@ strategy:
       </div>
       <div class="callout gotcha">
         <strong>6. The date range must cover at least ~253 trading days</strong>
-        Driven by <code>fip_lookback + 1</code>; a shorter range now raises a clear
+        Driven by <code>fip_lookback + 1</code>; a shorter range raises a clear
         <code>ValueError</code> (benchmark) or skips the ticker (per-name) instead of an opaque
-        crash — see the note under <a href="#running-sp500">§2 Running with S&amp;P 500</a>.
+        crash — see the note under <a href="#running-sp500">§3 Running with S&amp;P 500</a>.
+      </div>
+      <div class="callout gotcha">
+        <strong>7. Cash earns 0% while the regime filter is out of the market</strong>
+        There is no risk-free rate credited to idle cash, and the strategy sits in cash roughly a
+        quarter of the time (<a href="#results">§2</a>). Every reported return is understated by
+        whatever that cash would have earned in T-bills.
       </div>
 
       <h3 id="qa">Questions you might get, and how to answer them</h3>
@@ -1329,15 +1221,23 @@ strategy:
       </div>
       <div class="qa">
         <p class="q">Why inverse-volatility sizing instead of equal weight?</p>
-        <p class="a">It's a simple risk-parity tilt: among the top-5 momentum names, it reduces the influence of the single most volatile holding on portfolio swings, without needing a full covariance-based optimizer.</p>
+        <p class="a">It's a simple risk-parity tilt: among the top-N momentum names, it reduces the influence of the single most volatile holding on portfolio swings, without needing a full covariance-based optimizer.</p>
       </div>
       <div class="qa">
         <p class="q">What happens in a sideways, choppy market?</p>
         <p class="a">The regime filter only reacts to the benchmark's 200-day trend, so a genuinely choppy-but-flat market won't trigger the cash switch — the strategy could still whipsaw in and out of individual names as membership changes, since there's no minimum holding period beyond the periodic/membership rebalance logic.</p>
       </div>
       <div class="qa">
-        <p class="q">If you had to name the single biggest remaining methodology risk, what would it be?</p>
-        <p class="a"><code>skewness_penalty</code> still rewards rather than penalizes skew (<a href="#slide-skew">slide&nbsp;7</a>) — the one identified unit/sign issue that hasn't been measured yet. It's lower-confidence than the two fixed bugs, though: skew is a smaller term in the combined score even after the momentum fix, so the expected effect size is probably smaller too. See <a href="#research">§3 The Research Process</a> for the fixes that have already been measured.</p>
+        <p class="q">Why hold cash instead of shorting or rotating into bonds in a bear market?</p>
+        <p class="a">Simplicity, and because the regime filter is a blunt instrument. A 200-day moving average is late by construction — it exits after a decline is well underway and re-enters after a recovery is well underway. Layering shorts on top of a signal with that much lag adds a way to lose money in exactly the whipsaw conditions the filter handles worst. Rotating into bonds is more defensible and is already possible today via the <code>static</code> universe, which can include <code>TLT</code>/<code>GLD</code> and let momentum choose between asset classes directly.</p>
+      </div>
+      <div class="qa">
+        <p class="q">If you had to name the single biggest risk in the reported results, what would it be?</p>
+        <p class="a">Transaction costs. Turnover runs around 30x a year and nothing in the backtest models commissions, spread, or slippage (<a href="#results-limits">§2 Limitations</a>). The risk-adjusted edge over buy-and-hold is real in the numbers as computed, but it is not large enough that it can be assumed to survive realistic trading frictions — measuring that is the most valuable next piece of work on this codebase.</p>
+      </div>
+      <div class="qa">
+        <p class="q">What's the biggest methodology caveat in the strategy logic itself?</p>
+        <p class="a"><code>skewness_penalty</code> rewards rather than penalizes skew under the shipped defaults (<a href="#slide-skew">slide&nbsp;7</a>), so the strategy currently tilts <em>toward</em> jumpy, lottery-like names. That's a defensible configuration choice, but it's the opposite of what the parameter's name implies and the opposite of what momentum-crash literature would suggest — worth a deliberate decision rather than inheriting it by default.</p>
       </div>
     </section>
 

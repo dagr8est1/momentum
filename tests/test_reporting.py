@@ -1,3 +1,4 @@
+import re
 import numpy as np
 import pandas as pd
 
@@ -47,3 +48,21 @@ def test_generate_tearsheet_omits_turnover_row_when_not_provided(tmp_path):
     html = output_path.read_text()
     assert "Summary Statistics" in html
     assert "Annualized turnover" not in html
+
+
+def test_summary_compares_benchmark_over_the_strategys_own_window(tmp_path):
+    """The strategy's series starts after the regime-SMA warmup; the benchmark
+    must be clipped to that same window or it gets credited with returns the
+    strategy never had the chance to earn."""
+    dates = pd.date_range("2020-01-01", periods=400, freq="B")
+    benchmark = pd.Series(0.002, index=dates)  # steady riser over the FULL window
+    returns = pd.Series(0.002, index=dates[200:])  # strategy starts halfway in
+
+    output = tmp_path / "tearsheet.html"
+    generate_tearsheet(returns, benchmark, str(output))
+    html = output.read_text()
+
+    # Identical daily returns over the matched window => no relative gap.
+    match = re.search(r"Relative total return.*?([+-][\d.]+)%", html, re.S)
+    assert match is not None
+    assert abs(float(match.group(1))) < 0.5

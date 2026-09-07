@@ -20,6 +20,12 @@ def _render_summary(returns: pd.Series, benchmark: pd.Series, turnover: float | 
     end = returns.index.max()
     years = (end - start).days / 365.25
 
+    # Compare like with like: the strategy's series starts only after the
+    # regime SMA's warmup, so an unclipped benchmark would be credited with
+    # months of returns the strategy never had the chance to earn — enough
+    # to flip the headline comparison on a long backtest.
+    benchmark = benchmark.loc[start:end]
+
     total_return = qs.stats.comp(returns)
     benchmark_total_return = qs.stats.comp(benchmark)
     cagr = qs.stats.cagr(returns)
