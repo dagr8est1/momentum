@@ -1488,6 +1488,7 @@ strategy:
         <tr><td><code>cache_dir</code></td><td>Directory holding the git-tracked, sharded <code>prices_NN.parquet</code> cache</td><td><code>cache_data</code></td></tr>
         <tr><td><code>universe.source</code></td><td><code>static</code>, <code>index:sp500</code>, or <code>index:sp500_point_in_time</code> (the last also needs <code>universe.constituents_file</code>)</td><td><code>static</code>, ~140 tickers</td></tr>
         <tr><td><code>strategy.lookbacks</code></td><td>Momentum blend horizons (trading days)</td><td><code>[60, 120, 252]</code></td></tr>
+        <tr><td><code>strategy.momentum_skip</code></td><td>Trading days to skip between the lookback windows and the latest close (<code>21</code> ≈ the standard academic one-month skip). Measured mixed at 21 — helps <code>top_n=10</code>, hurts <code>top_n=5</code> — see <a href="#qa">Q&amp;A</a>; not adopted as the default</td><td><code>0</code></td></tr>
         <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>10</code></td></tr>
         <tr><td><code>strategy.vol_lookback</code></td><td>Window for the inverse-vol sizing volatility</td><td><code>126</code></td></tr>
         <tr><td><code>strategy.skewness_lookback</code></td><td>Window for the skewness signal</td><td><code>90</code></td></tr>
@@ -1506,7 +1507,7 @@ strategy:
         <li><strong><code>test_backtest_smoke.py</code></strong> — a small end-to-end run (benchmark + a handful of tickers, short date range, no live network calls) asserting the pipeline completes, produces a non-empty returns series, and writes a tearsheet. Also covers the two insufficient-history cases: a too-short benchmark raises <code>ValueError</code>, a too-short ticker is logged and skipped. This is the regression guard for cross-module wiring.</li>
         <li><strong><code>test_data.py</code>, <code>test_universe.py</code>, <code>test_indicators.py</code>, <code>test_strategy.py</code>, <code>test_cli.py</code>, <code>test_reporting.py</code></strong> — one module per source file, all network calls mocked/monkeypatched.</li>
       </ul>
-      <p>All 66 tests pass with <code>uv run pytest</code> in about 5 seconds; no test hits the network.</p>
+      <p>All 69 tests pass with <code>uv run pytest</code> in about 5 seconds; no test hits the network.</p>
     </section>
 
     <!-- ============================================================ -->
@@ -1602,7 +1603,7 @@ strategy:
       </div>
       <div class="qa">
         <p class="q">Your momentum lookback runs right up to the current day. Standard academic momentum skips the most recent month — why don't you?</p>
-        <p class="a">That's a genuine deviation and a fair criticism. The standard academic construction skips the most recent month — Carhart's UMD factor and most subsequent work use "12-2" momentum, measuring from 12 months ago to one month ago — specifically because short-horizon returns exhibit <em>reversal</em> rather than continuation. The last month's move tends to partially undo itself, so including it mixes a known-negative signal into the score. <code>momentum_blend()</code> measures each lookback straight to the latest close with no skip, so this implementation carries that contamination. It's the first change I'd test on the scoring side, and it's cheap: one index offset in one function.</p>
+        <p class="a">That was a genuine gap, now closed and measured rather than left as a guess. The standard academic construction skips the most recent month — Carhart's UMD factor and most subsequent work use "12-2" momentum, measuring from 12 months ago to one month ago — specifically because short-horizon returns exhibit <em>reversal</em> rather than continuation. <code>momentum_blend()</code> now takes an optional <code>skip</code> argument (config field <code>momentum_skip</code>, default <code>0</code>) that reproduces this. Tested at <code>momentum_skip=21</code> on the full 1997–2026 backtest, the result is <strong>mixed, not a clean win</strong>: <code>top_n=5</code> gets worse (CAGR 11.61% → 10.77%, Sharpe 0.75 → 0.69, max drawdown −46.0% → −50.2%) while <code>top_n=10</code> gets better (CAGR 8.69% → 9.86%, Sharpe 0.67 → 0.74, max drawdown −38.1% → −35.2%). That split hasn't been root-caused yet — a plausible guess is that a 5-stock book is far more sensitive to whichever single name the skip bumps in or out of the cutoff than a 10-stock one, but that's a hypothesis, not a measurement. Kept as an opt-in parameter (default off) rather than adopted, given the mixed result.</p>
       </div>
       <div class="qa">
         <p class="q">Why three lookback horizons instead of one?</p>
@@ -1672,7 +1673,7 @@ strategy:
       </div>
       <div class="qa">
         <p class="q">Given unlimited time, what would you do next, in order?</p>
-        <p class="a">Three things, in order. <strong>One:</strong> model transaction costs — it's the largest remaining unknown and it determines how much of the current edge is real. It's more urgent now than before, not less: the rebalance-rule change already cut turnover 3x and improved returns (<a href="#slide-rebalance">slide&nbsp;11</a>), so the strategy can now absorb more realistic cost assumptions than it used to, which makes this the right moment to actually measure it. <strong>Two:</strong> fix the two scoring issues — normalize the three score terms so the weights mean what they say, and skip the most recent month in the momentum lookback to stop feeding short-term reversal into the signal. <strong>Three:</strong> walk-forward validation and an out-of-sample test on a different index, because until that exists this is a well-measured backtest rather than evidence about the future.</p>
+        <p class="a">Three things, in order. <strong>One:</strong> model transaction costs — it's the largest remaining unknown and it determines how much of the current edge is real. It's more urgent now than before, not less: the rebalance-rule change already cut turnover 3x and improved returns (<a href="#slide-rebalance">slide&nbsp;11</a>), so the strategy can now absorb more realistic cost assumptions than it used to, which makes this the right moment to actually measure it. <strong>Two:</strong> normalize the three score terms so the weights mean what they say (the one-month-skip half of this pair is already done — <code>momentum_skip</code> is implemented and measured, but the result was a mixed win/loss across <code>top_n</code> settings rather than a clean improvement, and hasn't been root-caused). <strong>Three:</strong> walk-forward validation and an out-of-sample test on a different index, because until that exists this is a well-measured backtest rather than evidence about the future.</p>
       </div>
       <div class="qa">
         <p class="q">What would make you abandon this strategy?</p>
