@@ -811,6 +811,67 @@
             either way.
           </div>
           <p style="margin:0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the membership-diff check in <code>next()</code>.</p>
+
+          <div class="callout gotcha" style="margin-top:20px">
+            <strong><span class="badge" style="background:var(--warn);color:#fff">Experimental — feature branch, not merged</span> What if Trigger A is removed entirely?</strong>
+            The measurement above raised an obvious follow-up: Trigger A fires so much more often
+            than Trigger B that it is, in practice, the <em>only</em> trigger that matters. So what
+            happens if it's removed — if the portfolio is only allowed to trade on the calendar
+            schedule, full stop? Tested on <code>feature/calendar-only-rebalance</code>, same
+            1997–2026 point-in-time backtest:
+          </div>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table" style="margin:12px 0">
+            <tr><th></th><th class="num">CAGR</th><th class="num">Sharpe</th><th class="num">Max DD</th><th class="num">Turnover</th></tr>
+            <tr><td>n=5, current design (Trigger A + B)</td><td class="num">9.50%</td><td class="num">0.63</td><td class="num">-46.72%</td><td class="num">33.5x/yr</td></tr>
+            <tr class="winner"><td>n=5, calendar-only, <strong>monthly</strong></td><td class="num good-cell">11.61%</td><td class="num good-cell">0.75</td><td class="num">-45.99%</td><td class="num good-cell">11.0x/yr</td></tr>
+            <tr><td>n=5, calendar-only, <strong>quarterly</strong></td><td class="num warn-cell">7.85%</td><td class="num warn-cell">0.57</td><td class="num warn-cell">-47.72%</td><td class="num">6.4x/yr</td></tr>
+            <tr><td>n=10, current design (Trigger A + B)</td><td class="num">8.43%</td><td class="num">0.64</td><td class="num">-43.53%</td><td class="num">31.4x/yr</td></tr>
+            <tr class="winner"><td>n=10, calendar-only, <strong>monthly</strong></td><td class="num good-cell">8.69%</td><td class="num good-cell">0.67</td><td class="num good-cell">-38.08%</td><td class="num good-cell">10.6x/yr</td></tr>
+            <tr><td>n=10, calendar-only, <strong>quarterly</strong></td><td class="num warn-cell">5.69%</td><td class="num warn-cell">0.50</td><td class="num warn-cell">-44.27%</td><td class="num">6.5x/yr</td></tr>
+          </table>
+          </div>
+          <p>
+            Monthly-only is a genuine improvement, not noise — CAGR +2.1pp and Sharpe +0.12 at
+            <code>n=5</code>, plus a 3x cut in turnover. Quarterly-only is worse than the current
+            design on every metric at both <code>n</code> values. The two calendar-only variants
+            disagree sharply with each other, which itself says the win isn't just "trade less" —
+            the schedule has to still be tight enough to keep the momentum signal fresh.
+          </p>
+          <p><strong>Why removing Trigger A helps: it was forcing exits on noise, not signal.</strong>
+          There's no commission or slippage modeled in this backtest, so the CAGR/Sharpe gap can't be
+          a trading-cost effect — it has to come from <em>which</em> trades happen. Instrumenting every
+          position's holding period confirms it: under the current design, the median completed
+          holding period is <strong>5 days</strong> (79.5% of all trades close within 21 days); under
+          calendar-only monthly, the median jumps to <strong>32 days</strong> (only 26.6% close within
+          21 days). Bucketing trades by how long they were held shows why that matters — grouped by
+          holding period, for <code>n=5</code>:
+          </p>
+          <div class="table-scroll" style="overflow-x:auto">
+          <table class="worked-table" style="margin:12px 0">
+            <tr><th>Held</th><th class="num">Current design: mean return / win rate</th><th class="num">Calendar-only: mean return / win rate</th></tr>
+            <tr><td>0–5 days</td><td class="num warn-cell">-0.47% / 46.0%</td><td class="num warn-cell">-0.47% / 48.9%</td></tr>
+            <tr><td>6–21 days</td><td class="num warn-cell">-0.65% / 42.2%</td><td class="num warn-cell">-2.23% / 25.5%</td></tr>
+            <tr><td>22–90 days</td><td class="num good-cell">+3.53% / 63.8%</td><td class="num good-cell">+0.85% / 52.7%</td></tr>
+            <tr><td>91+ days</td><td class="num good-cell">+14.34% / 77.6%</td><td class="num good-cell">+15.80% / 74.5%</td></tr>
+          </table>
+          </div>
+          <p style="margin:0 0 12px">
+            Every trade held 21 days or less has <em>negative</em> expected return under both designs
+            — all of the strategy's real profit comes from the 22-day-plus holdings. The problem with
+            the current design is that Trigger A fires so eagerly on short-term rank noise that
+            <strong>79.5% of all trades</strong> fall into that value-destroying 0–21-day bucket
+            (vs. 26.6% under calendar-only monthly), repeatedly cutting positions right around the
+            time a rank dips below the cutoff — often just short-term noise, not a real trend
+            reversal — before the position has had time to reach the 22-day-plus range where momentum
+            actually pays off. Calendar-only monthly doesn't pick better stocks; it simply lets a
+            larger share of them survive long enough to become the winners that were there all along.
+          </p>
+          <p style="margin:0" class="code-ref">Status: implemented and tested on
+          <code>feature/calendar-only-rebalance</code> (not merged). Quarterly-only is not being
+          pursued further given the result above; if calendar-only monthly is adopted, it would
+          replace Trigger A entirely rather than becoming a config toggle, since Trigger A's entire
+          purpose was superseded by this result.</p>
         </article>
 
         <article class="slide" id="slide-example">
