@@ -16,6 +16,7 @@ from momentum.scoring import (
 class MomentumStrategy(bt.Strategy):
     params = dict(
         lookbacks=[60, 120, 252],
+        momentum_skip=0,
         top_n=5,
         vol_lookback=126,
         skewness_lookback=90,
@@ -65,8 +66,10 @@ class MomentumStrategy(bt.Strategy):
             self.total_traded_value += abs(order.executed.value)
 
     def _momentum_score(self, d):
-        window = np.array(d.close.get(size=self._max_momentum_lookback + 1))
-        return momentum_blend(window, self.p.lookbacks)
+        window = np.array(
+            d.close.get(size=self._max_momentum_lookback + self.p.momentum_skip + 1)
+        )
+        return momentum_blend(window, self.p.lookbacks, skip=self.p.momentum_skip)
 
     def _fip_score(self, d):
         window = np.array(d.close.get(size=self.p.fip_lookback + 1))
@@ -166,7 +169,7 @@ class MomentumStrategy(bt.Strategy):
             self.p.vol_lookback + 1,
             self.p.skewness_lookback,
             self.p.ts_mom_lookback,
-            self._max_momentum_lookback + 1,
+            self._max_momentum_lookback + self.p.momentum_skip + 1,
         )
 
         members = self._current_members(current_date)

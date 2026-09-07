@@ -4,11 +4,21 @@ import numpy as np
 from scipy.stats import skew
 
 
-def momentum_blend(closes: Sequence[float], lookbacks: Sequence[int]) -> float:
-    """Mean percentage return from each lookback's close to the latest close."""
+def momentum_blend(closes: Sequence[float], lookbacks: Sequence[int], skip: int = 0) -> float:
+    """Mean percentage return from each lookback's close to the close `skip`
+    trading days before the latest bar.
+
+    `skip=0` (the default) measures straight to the latest close. Standard
+    academic momentum (e.g. Carhart's UMD) instead skips the most recent
+    month (~21 trading days) because short-horizon returns tend to exhibit
+    reversal rather than continuation -- `skip` reproduces that construction
+    without changing the default, unproven-safer behavior.
+    """
     closes = np.asarray(closes, dtype=float)
-    latest = closes[-1]
-    returns = [(latest - closes[-1 - lb]) / closes[-1 - lb] for lb in lookbacks]
+    recent = closes[-1 - skip]
+    returns = [
+        (recent - closes[-1 - lb - skip]) / closes[-1 - lb - skip] for lb in lookbacks
+    ]
     return float(np.mean(returns))
 
 

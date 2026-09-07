@@ -7,6 +7,7 @@ import yaml
 @dataclass
 class StrategyConfig:
     lookbacks: list[int] = field(default_factory=lambda: [60, 120, 252])
+    momentum_skip: int = 0
     top_n: int = 10
     vol_lookback: int = 126
     skewness_lookback: int = 90
