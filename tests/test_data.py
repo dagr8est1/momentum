@@ -109,6 +109,51 @@ def test_load_prices_extends_cache_when_range_not_covered(tmp_path, monkeypatch)
     assert len(result) == 15
 
 
+def test_load_prices_only_refetches_the_missing_tail(tmp_path, monkeypatch):
+    """Regression test for a real reproducibility bug: a ticker whose cached
+    data ends before the requested `end` (e.g. genuinely delisted, so it can
+    NEVER satisfy `_covers_range` against a fixed future end date) had its
+    ENTIRE history re-downloaded and re-merged on every single call, with
+    `_merge` letting the fresh copy override every already-cached date. A
+    data provider's response for the same historical range isn't guaranteed
+    byte-identical run to run, so this silently perturbed old, settled
+    prices on every call — measured to shift a 30-year backtest's total
+    return by several percentage points between otherwise-identical runs.
+    Only the genuinely missing tail should ever be requested or merged in.
+    """
+    _seed_combined(tmp_path, "MSFT", _fake_ohlcv("2022-01-03", periods=5))  # Jan 3-7
+
+    calls = []
+
+    def _fake_download(ticker, start, end):
+        calls.append((start, end))
+        # A real download only ever returns rows inside [start, end] - the
+        # cached dates deliberately carry DIFFERENT (negative) values here,
+        # so the test fails loudly if they're ever requested and merged in
+        # instead of being left alone.
+        revised_old = _fake_ohlcv("2022-01-03", periods=5) * -1  # Jan 3-7
+        new_tail = _fake_ohlcv("2022-01-10", periods=5)  # Jan 10-14
+        full = pd.concat([revised_old, new_tail])
+        return full.loc[start:end]
+
+    monkeypatch.setattr(data, "_download", _fake_download)
+
+    result = data.load_prices("MSFT", "2022-01-03", "2022-01-14", tmp_path)
+
+    assert len(calls) == 1
+    called_start, called_end = calls[0]
+    assert called_start == "2022-01-07"  # the ticker's own cached max, not the original start
+    assert called_end == "2022-01-14"
+
+    # Days strictly before the cached boundary must be untouched, not
+    # overwritten by the (deliberately different) values `_download` would
+    # have returned for them had it been asked. The boundary date itself
+    # (the ticker's own cached max) is intentionally re-fetched along with
+    # the tail, so its value is allowed to refresh.
+    assert (result.loc["2022-01-03":"2022-01-06", "Close"] >= 0).all()
+    assert len(result) == 10
+
+
 def test_load_prices_remembers_ticker_with_no_data(tmp_path, monkeypatch):
     calls = []
 

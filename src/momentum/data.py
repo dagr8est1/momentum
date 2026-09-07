@@ -95,7 +95,7 @@ def load_prices(ticker: str, start: str, end: str, cache_dir: Path) -> pd.DataFr
         # re-attempting it on every single run.
         return empty_result
 
-    fresh = _download(ticker, start, end)
+    fresh = _download_missing_range(ticker, start, end, cached)
     updated_ticker = fresh if cached is None else _merge(cached, fresh)
 
     if not updated_ticker.empty:
@@ -210,14 +210,43 @@ def _downcast(df: pd.DataFrame) -> pd.DataFrame:
 
 def _covers_range(df: pd.DataFrame, start: str, end: str) -> bool:
     # A ticker whose real trading history starts after `start` (e.g. a recent
-    # IPO/spinoff) can never satisfy this, so it gets re-downloaded and
-    # re-persisted on every run — a minor, expected source of row reordering
-    # / tiny float-precision churn in cache_data/prices.parquet for the
-    # handful of tickers this affects. Not worth a "permanently short" cache
-    # state for what's a small, cosmetic diff.
+    # IPO/spinoff) or ends before `end` (e.g. delisted, acquired) can never
+    # satisfy this — see `_download_missing_range` for how that's handled
+    # cheaply instead of re-fetching the ticker's entire history every run.
     if df.empty:
         return False
     return df.index.min() <= pd.Timestamp(start) and df.index.max() >= pd.Timestamp(end)
+
+
+def _download_missing_range(
+    ticker: str, start: str, end: str, cached: pd.DataFrame | None
+) -> pd.DataFrame:
+    """Fetch only the sub-range(s) `cached` doesn't already have, instead of
+    re-downloading and re-merging the ticker's entire history on every call.
+
+    Found to matter via a real reproducibility bug: a ticker whose price
+    history has genuinely ended (delisted, acquired) never satisfies
+    `_covers_range` against a fixed future `end`, so every single run
+    re-fetched its ENTIRE history and `_merge` let the fresh copy override
+    every already-cached date. Since a data provider's response for the same
+    historical range isn't guaranteed byte-identical run to run (routine
+    revisions, transient partial responses), that silently perturbed
+    long-settled historical prices on every run — measured to shift a
+    30-year backtest's total return by several percentage points between
+    otherwise-identical runs. Only ever fetching the genuinely-missing
+    head/tail leaves already-cached dates untouched.
+    """
+    if cached is None:
+        return _download(ticker, start, end)
+
+    frames = []
+    if cached.index.min() > pd.Timestamp(start):
+        frames.append(_download(ticker, start, str(cached.index.min().date())))
+    if cached.index.max() < pd.Timestamp(end):
+        frames.append(_download(ticker, str(cached.index.max().date()), end))
+    if not frames:
+        return pd.DataFrame(columns=["Open", "High", "Low", "Close", "Volume"])
+    return pd.concat(frames)
 
 
 def _merge(cached: pd.DataFrame, fresh: pd.DataFrame) -> pd.DataFrame:
