@@ -367,6 +367,7 @@
     <a class="sub" href="#results-growth">Growth of $1,000</a>
     <a class="sub" href="#results-risk">Risk profile</a>
     <a class="sub" href="#results-regimes">Performance by market condition</a>
+    <a class="sub" href="#results-flat">Why the curve goes flat</a>
     <a class="sub" href="#results-method">Method &amp; reproduction</a>
     <a class="sub" href="#results-limits">Limitations</a>
     <a href="#architecture">3 · Code &amp; How to Run</a>
@@ -428,6 +429,11 @@
           momentum could pay out. Replacing it with a monthly-only schedule (what's reported
           throughout this document) raised CAGR 2.1pp and cut turnover 3x
           (<a href="#slide-rebalance">slide&nbsp;11</a>).</p>
+          <p style="margin:0 0 10px"><strong>The number that surprises people.</strong> The equity
+          curve is flat through all of 2008 — the portfolio was simply empty, in cash for 256
+          straight trading days. The same rule produced the <em>worst</em> drawdown in the sample in
+          2000, when a choppy decline whipsawed it in and out 19 times
+          (<a href="#results-flat">why the curve goes flat</a>).</p>
           <p style="margin:0"><strong>Where to go next.</strong>
           <a href="#thesis">The thesis</a> is why momentum should work at all;
           <a href="#overview">§1</a> is the full decision procedure, formula by formula;
@@ -640,7 +646,9 @@
             be tuned away; it is the price paid for the protection, and it is exactly why the
             strategy loses far less than the benchmark in the 2008 and 2020 crashes while badly
             trailing it in the recoveries that follow (<a href="#results-regimes">§2</a>). A faster
-            filter would cut the lag and buy more whipsaw; a slower one, the reverse.
+            filter would cut the lag and buy more whipsaw; a slower one, the reverse — and whipsaw
+            is not a hypothetical cost here: it is where this strategy's single worst drawdown came
+            from (<a href="#results-flat">§2, why the curve goes flat</a>).
           </div>
           <p class="code-ref">Implements: <code>MomentumStrategy.next()</code>, the <code>self.market.close[0] &lt; self.regime_ma[0]</code> branch in <code>strategy.py</code>.</p>
         </article>
@@ -1131,17 +1139,18 @@
       <p style="margin-bottom:6px"><strong>What to look for:</strong></p>
       <ul style="margin-top:0">
         <li>In the <strong>2008-09 band</strong> the strategy lines go almost flat while grey
-        falls by more than half — that flatness is the portfolio sitting in cash, and it is the
-        single clearest picture of the regime filter working. The protection is far weaker in the
-        2000-02 band, where <code>top_n=5</code> still lost nearly 44% (a momentum-led selloff hits
-        momentum holdings before the index-level filter ever triggers).</li>
+        falls by more than half — that flatness is simply an empty portfolio: the book was in cash
+        for 256 consecutive trading days. The protection is far weaker in the 2000-02 band, where
+        <code>top_n=5</code> still lost nearly 44%, and the reason is <em>not</em> that the filter
+        failed to fire — it fired 19 times in eight months, repeatedly dragging the book back into
+        collapsing tech leadership. <a href="#results-flat">Full reconstruction of both</a>.</li>
         <li>Straight after each band, grey climbs faster than blue and orange. That is the cost of
         the same mechanism: re-entry only happens once the 200-day average confirms the recovery,
         by which point a chunk of the rebound is gone.</li>
         <li>Both lines' lead over grey peaks right after a crisis and erodes across the long bull
         runs that follow — that shape repeats throughout. But the two settings end up in very
         different places by 2026: blue's lead over grey narrows but never closes (it is still
-        roughly 1.8x grey's value at the end, having peaked near 2.6x around 2016), while orange's
+        roughly 1.8x grey's value at the end, having peaked above 3.0x in late 2018), while orange's
         does close — grey overtakes it during the 2009-2020 climb and stays ahead. That's the same
         number as the headline table's <code>top_n=10</code> cumulative return trailing SPY's.</li>
       </ul>
@@ -1149,11 +1158,16 @@
       <h3 id="results-risk">Risk profile</h3>
       <p>
         The benchmark's worst drawdown is the 2007-10 → 2009-03 financial crisis, −55.2%
-        peak-to-trough. Neither strategy configuration avoids that period, but both cut it
-        materially (−46.0% and −38.1%). Their <em>own</em> worst drawdowns land in the dot-com
-        unwind instead — which is the expected failure mode for momentum: a sharp rotation out of
-        the exact names that had been leading, happening before the index-level regime filter has
-        had time to react.
+        peak-to-trough. The strategy barely participated in it — it was in cash for 88% of that
+        window and finished it down only 4.1% (<code>top_n=5</code>) and 2.3% (<code>top_n=10</code>).
+        Its <em>own</em> worst drawdowns happen somewhere else entirely. <code>top_n=5</code>'s
+        <strong>−46.0%</strong> runs from <strong>2000-03-23 to 2000-08-10</strong> — start to
+        finish inside the five months when the regime filter was being whipsawed in and out of a
+        collapsing tech leadership (<a href="#results-flat">reconstructed below</a>).
+        <code>top_n=10</code>'s <strong>−38.1%</strong> runs 2000-03-27 to 2003-04-08, spanning the
+        whole dot-com unwind. Worth stating plainly, because it inverts the intuition: the
+        strategy's worst period is not the market's worst period, and the mechanism that saved it
+        in 2008 is the same one that hurt it in 2000.
       </p>
       <p>
         Turnover of ~11x a year is the figure worth quoting — a rebalance now fires only on the
@@ -1227,11 +1241,11 @@
       <div class="table-scroll" style="overflow-x:auto">
       <table class="worked-table">
         <tr><th>Market condition</th><th>What the strategy does</th><th>Result vs SPY</th></tr>
-        <tr><td><strong>Sustained decline</strong><br><span style="opacity:.75">GFC, dot-com, 2022</span></td><td>Benchmark breaks its 200-day average; the entire book is liquidated to cash and stays there until the average is reclaimed.</td><td class="good-cell"><strong>Large outperformance.</strong> The slower and more grinding the decline, the better this works — the filter has time to trigger before most of the damage.</td></tr>
-        <tr><td><strong>Fast crash</strong><br><span style="opacity:.75">COVID, Feb–Mar 2020</span></td><td>Same mechanism, but a 33-day drawdown barely gives a 200-day average time to react.</td><td class="good-cell">Still ahead (−11%/−12% vs −33%), but this is the closest the filter has come to being outrun. A faster crash would defeat it.</td></tr>
+        <tr><td><strong>Sustained, one-way decline</strong><br><span style="opacity:.75">GFC, 2022</span></td><td>Benchmark breaks its 200-day average and <em>stays</em> below it; the book is liquidated once and sits in cash for months.</td><td class="good-cell"><strong>Large outperformance.</strong> The decisive part isn't the size of the decline, it's that the crossing happens once and holds — see <a href="#results-flat">why the curve goes flat</a>.</td></tr>
+        <tr><td><strong>Fast crash</strong><br><span style="opacity:.75">COVID, Feb–Mar 2020</span></td><td>Same mechanism, but a 33-day drawdown barely gives a 200-day average time to react: five flips in the first week of the decline before the signal settled, leaving the book in cash for only two-thirds of the window.</td><td class="good-cell">Still well ahead (−10.5%/−11.9% vs −33.4%), but this is the closest the filter has come to being outrun. A faster crash would defeat it.</td></tr>
         <tr><td><strong>Sharp V-shaped recovery</strong><br><span style="opacity:.75">2020–2022</span></td><td>Sits in cash while the market rebounds, because the 200-day average cannot confirm a new uptrend until much of the move has happened.</td><td class="warn-cell"><strong>Worst case by far.</strong> +44%/+48% against +114%. This is the direct, unavoidable cost of the protection above.</td></tr>
         <tr><td><strong>Long steady bull</strong><br><span style="opacity:.75">2009–2020, 2023–2026</span></td><td>Mostly invested and concentrated in 5–10 names, with no drawdowns to sidestep.</td><td class="warn-cell">Behind at <code>n=10</code>; still ahead but decelerating at <code>n=5</code>. The filter adds nothing when there is nothing to avoid.</td></tr>
-        <tr><td><strong>Momentum-led selloff</strong><br><span style="opacity:.75">dot-com, 2000–2002</span></td><td>The names being sold hardest <em>are</em> the recent winners the strategy holds, so it takes the hit before the index-level filter ever triggers.</td><td>Ahead of SPY, but this is where the strategy's own worst drawdown occurs (−46.0%/−38.1%) — the classic momentum crash.</td></tr>
+        <tr><td><strong>Choppy, momentum-led selloff</strong><br><span style="opacity:.75">dot-com, 2000–2002</span></td><td>The index keeps crossing back above its 200-day average for a few days at a time, pulling the strategy back in — and the names it buys back are the collapsing former leaders.</td><td class="warn-cell">Ahead of SPY over the window, but this is where the strategy's own worst drawdown occurs (−46.0%/−38.1%) — a crowded leadership group deflating faster than the index, dissected <a href="#results-flat">below</a>.</td></tr>
       </table>
       </div>
       <p style="margin:0">
@@ -1240,6 +1254,91 @@
         reversals are faster than confirmation. That single trade-off — not stock selection —
         explains most of the dispersion in the table.
       </p>
+
+      <h3 id="results-flat">Why the curve goes flat in 2008 but not in 2000</h3>
+      <p>
+        The most striking feature of the <a href="#results-growth">growth chart</a> is that the
+        strategy lines go <em>completely flat</em> through 2008–09 while the benchmark loses more
+        than half its value — but show a real, deep drawdown through 2000–02. Same rule, same data,
+        opposite outcomes. Since a flat line through the worst crash in the sample is exactly what
+        look-ahead bias would look like, this section reconstructs precisely what happened.
+      </p>
+      <div class="callout">
+        <strong>The signal, stated exactly</strong>
+        One comparison, evaluated every trading day, before any stock is looked at:
+        <strong>is SPY's close below the average of its own previous 200 closes?</strong> If yes,
+        every position is closed and the strategy holds cash. That is the entire mechanism —
+        no VIX, no macro data, no credit spreads, no second confirming signal. Implemented as
+        <code>self.market.close[0] &lt; self.regime_ma[0]</code>, where <code>regime_ma</code> is a
+        plain <code>SimpleMovingAverage(SPY.close, period=200)</code>.
+      </div>
+      <p><strong>2008 — one crossing that held for a year.</strong> The strategy went to cash on
+      <strong>2008-05-21</strong>, when SPY closed at 99.85 against a 200-day average of 101.48 — a
+      breach of just 1.6%, and nearly four months before Lehman failed. It did not re-enter until
+      <strong>2009-05-29</strong> (SPY 67.98, average 67.63). Across the <strong>256 consecutive
+      trading days</strong> in between, SPY closed below its 200-day average <em>every single
+      day</em> — the condition never once flipped back. Meanwhile SPY fell a further
+      <strong>−50.2%</strong> from that exit price to its 2009-03-09 low of 49.68. The line is flat
+      because the portfolio was empty, and it was empty because one slow-moving average was breached
+      once and never reclaimed.</p>
+      <p><strong>2000 — the same rule, crossed 19 times.</strong> Between February and September 2000
+      the condition flipped <strong>19 times</strong>: SPY kept popping back above its 200-day average
+      for a few days, triggering a re-entry, then falling back below it. The strategy was invested for
+      <strong>92% of that window</strong> — and every re-entry bought back into whatever had the
+      strongest trailing momentum, which in 2000 was the same dot-com and tech leadership that was
+      about to keep falling. Over those eight months the strategy lost <strong>−29.5% while SPY
+      gained +3.7%</strong> — a 33-point gap opened while the index was <em>up</em>. That is the
+      cleanest illustration in the whole sample of what this strategy actually is: the index was
+      fine, but the momentum leadership was disintegrating, and the book was concentrated in exactly
+      it. Note this is a different failure mode from the classic
+      <a href="#thesis">momentum crash</a> described in the thesis — that one strikes at market
+      <em>bottoms</em>, when beaten-down names rip upward. This is the mirror image: a crowded
+      leadership group deflating at a market <em>top</em>, with an index-level filter too slow and
+      too choppy to get the book out of the way.</p>
+      <p>
+        Once the index finally broke down decisively, the filter behaved exactly as it did in 2008:
+        from 2000-09-29 to 2002-01-03 the strategy was in cash <strong>100%</strong> of the time and
+        returned precisely <strong>0.0%</strong>, while SPY fell <strong>−18.1%</strong>.
+      </p>
+      <p style="margin-bottom:6px"><strong>Attribution settles it.</strong> Splitting each downturn's
+      return into the days the book was invested versus the days it sat in cash (<code>top_n=5</code>):</p>
+      <div class="table-scroll" style="overflow-x:auto">
+      <table class="worked-table">
+        <tr><th>Downturn</th><th class="num">Total</th><th class="num">Days invested</th><th class="num">Return while invested</th><th class="num">Days in cash</th><th class="num">Return while in cash</th></tr>
+        <tr class="winner"><td>Dot-com (2000-03 → 2002-10)</td><td class="num warn-cell">−43.8%</td><td class="num">148</td><td class="num warn-cell">−43.9%</td><td class="num">490</td><td class="num">+0.2%</td></tr>
+        <tr><td>GFC (2007-10 → 2009-03)</td><td class="num">−4.1%</td><td class="num">43</td><td class="num">−3.6%</td><td class="num">313</td><td class="num">−0.5%</td></tr>
+        <tr><td>COVID crash (2020-02 → 2020-03)</td><td class="num">−10.5%</td><td class="num">9</td><td class="num">−9.5%</td><td class="num">15</td><td class="num">−1.1%</td></tr>
+        <tr><td>2022 bear (2022-01 → 2022-10)</td><td class="num">−5.0%</td><td class="num">44</td><td class="num">−3.6%</td><td class="num">152</td><td class="num">−1.5%</td></tr>
+      </table>
+      </div>
+      <p style="margin:0 0 14px; font-size:13px; color:var(--text-dim)">
+        Cash returns aren't exactly 0.00% only because this split assigns exposure by the signal
+        shifted one day, while real liquidation completes at the next bar's open — a fraction of a
+        day of residual exposure per flip. The uncontaminated case is the 2000-09-29 → 2002-01-03
+        stretch above: 100% in cash, exactly 0.0%.
+      </p>
+      <p>
+        The whole of dot-com's <strong>−43.8%</strong> was incurred on the 148 days the strategy was
+        <em>invested</em>; the 490 days in cash contributed <strong>+0.2%</strong>. The filter did not
+        fail to protect during 2000–02 — it protected for 77% of the window. The damage was done
+        during the 23% when repeated whipsaws dragged the book back into a collapsing leadership
+        group.
+      </p>
+      <div class="callout gotcha">
+        <strong>Why none of this can be look-ahead bias</strong>
+        Three independent reasons. <strong>One:</strong> the moving average is causal — a
+        <code>SimpleMovingAverage</code> over the trailing 200 closes, and the comparison uses index
+        <code>[0]</code> (today) for both terms. No future bar is readable. <strong>Two:</strong>
+        orders fill at the <em>next</em> bar's open, never at the close the decision was made on, so
+        there is a full day of execution lag working <em>against</em> the strategy — a look-ahead
+        artifact would show the opposite. <strong>Three:</strong> the mechanism is falsifiable and it
+        fails in the predicted places. A strategy peeking at the future would not have been dragged
+        into 19 whipsaws in 2000, would not have lost 29.5% while the index rose, would not have
+        re-entered in May 2009 well after the March bottom, and would not have missed most of the
+        2020–2022 rebound. The flat 2008 line and the bloody 2000 line are the <em>same</em> rule
+        producing different outcomes on differently-shaped declines.
+      </div>
+
       <h3 id="results-method">How these were produced</h3>
       <ul>
         <li><strong>Universe:</strong> <code>index:sp500_point_in_time</code> — actual month-by-month S&amp;P&nbsp;500 membership, so no survivorship or look-ahead bias in the candidate list (<a href="#slide-universe">slide&nbsp;2</a>).</li>
@@ -1583,6 +1682,15 @@ strategy:
         quarter of the time (<a href="#results">§2</a>). Every reported return is understated by
         whatever that cash would have earned in T-bills.
       </div>
+      <div class="callout gotcha">
+        <strong>8. The regime filter has no confirmation band, and chop is where it bleeds</strong>
+        Re-entry happens the instant the benchmark closes back above its 200-day average — by one
+        cent, for one day, with no margin required and no minimum holding period. In a decline that
+        oscillates around the average this fires over and over: 19 times between February and
+        September 2000, which is where the strategy's worst drawdown in the entire sample was
+        generated (<a href="#results-flat">§2</a>). The flat, protected 2008 line and the −46%
+        drawdown of 2000 are the same rule meeting differently-shaped declines.
+      </div>
 
       <h3 id="qa">Questions you might get, and how to answer them</h3>
       <p style="margin-top:-4px">
@@ -1622,6 +1730,10 @@ strategy:
       <div class="qa">
         <p class="q">How do you know you don't have look-ahead bias?</p>
         <p class="a">Three separate places it could enter, each addressed. Universe: membership comes from month-by-month point-in-time snapshots, so a rebalance can only choose names actually in the index on that date (<a href="#slide-universe">slide&nbsp;2</a>) — the alternative, scraping today's constituent list, silently hands the strategy every future index addition. Signals: every score is computed from a trailing window ending at the current bar, and a stock isn't scoreable until it has genuinely accumulated enough of its own history. Execution: orders are placed on the signal bar but filled at the <em>next</em> bar's open, never at the close I made the decision on. The one honest exception is shares outstanding for cap-weighted sizing, which is a current snapshot applied to past dates — it's off by default for that reason.</p>
+      </div>
+      <div class="qa">
+        <p class="q">Your equity curve is dead flat through all of 2008 while the market halves. That looks too good — is it real?</p>
+        <p class="a">It's real, and it's less impressive than it looks once you see the mechanism. The strategy went to cash on 2008-05-21, when SPY closed 1.6% below its 200-day average — months before Lehman, on a completely unremarkable day. It then stayed in cash for 256 consecutive trading days because SPY never once closed back above that average until 2009-05-29. The line is flat because the portfolio was <em>empty</em>; a cash balance has no volatility. The same rule produced the opposite result in 2000, when the index kept crossing back above its average — 19 flips in eight months, the strategy invested 92% of the time, losing 29.5% while SPY <em>gained</em> 3.7%. If I were peeking at the future I would not have taken that beating, nor re-entered in May 2009 two months after the bottom, nor missed most of the 2020–2022 rebound. Full reconstruction and the loss attribution are in <a href="#results-flat">§2</a>.</p>
       </div>
       <div class="qa">
         <p class="q">Why separate <code>scoring.py</code> from <code>strategy.py</code>?</p>
@@ -1669,11 +1781,11 @@ strategy:
       </div>
       <div class="qa">
         <p class="q">What happens in a sideways, choppy market?</p>
-        <p class="a">This is the design's weakest regime and the filter doesn't help. A 200-day average only reacts to the benchmark's trend, so a market that chops sideways without a sustained decline never triggers the cash switch — the strategy stays invested and rotates through whichever names are transiently leading. Under the baseline rebalance rule that's actively costly, since it churns on rank noise with a 5-day median holding period. It's the same weakness the rebalance finding addresses.</p>
+        <p class="a">This is the design's weakest regime, and I can point at exactly what it costs. A choppy market is worse than a merely flat one: when the index oscillates <em>around</em> its 200-day average rather than sitting cleanly above or below it, the filter fires repeatedly instead of once, and each re-entry buys back into whatever is currently leading. That's precisely what produced the strategy's worst drawdown in the sample — 19 flips between February and September 2000, the book invested 92% of the time, down 29.5% while SPY was <em>up</em> 3.7% (<a href="#results-flat">full reconstruction</a>). So the honest answer isn't "the filter doesn't help in chop," it's "in chop the filter actively hurts, and it's the single largest identified weakness in the design." It has no minimum holding period and no confirmation band (e.g. requiring the index to clear its average by some margin, or stay above it for N days, before re-entering) — a band is the obvious first thing I'd test against it.</p>
       </div>
       <div class="qa">
         <p class="q">Given unlimited time, what would you do next, in order?</p>
-        <p class="a">Three things, in order. <strong>One:</strong> model transaction costs — it's the largest remaining unknown and it determines how much of the current edge is real. It's more urgent now than before, not less: the rebalance-rule change already cut turnover 3x and improved returns (<a href="#slide-rebalance">slide&nbsp;11</a>), so the strategy can now absorb more realistic cost assumptions than it used to, which makes this the right moment to actually measure it. <strong>Two:</strong> normalize the three score terms so the weights mean what they say (the one-month-skip half of this pair is already done — <code>momentum_skip</code> is implemented and measured, but the result was a mixed win/loss across <code>top_n</code> settings rather than a clean improvement, and hasn't been root-caused). <strong>Three:</strong> walk-forward validation and an out-of-sample test on a different index, because until that exists this is a well-measured backtest rather than evidence about the future.</p>
+        <p class="a">Four things, in order. <strong>One:</strong> model transaction costs — the largest remaining unknown, and it determines how much of the current edge is real. It's more urgent now than before, not less: the rebalance-rule change already cut turnover 3x and improved returns (<a href="#slide-rebalance">slide&nbsp;11</a>), so the strategy can absorb more realistic cost assumptions than it used to, which makes this the right moment to measure it. <strong>Two:</strong> add a confirmation band to the regime filter — require the index to clear its 200-day average by some margin, or hold above it for several days, before re-entering. The whipsaw analysis (<a href="#results-flat">§2</a>) shows this is where the single worst drawdown in the sample came from, and it's the best-evidenced improvement still on the table. <strong>Three:</strong> normalize the three score terms so the weights mean what they say (the one-month-skip half of this pair is already done — <code>momentum_skip</code> is implemented and measured, but the result was a mixed win/loss across <code>top_n</code> settings rather than a clean improvement, and hasn't been root-caused). <strong>Four:</strong> walk-forward validation and an out-of-sample test on a different index, because until that exists this is a well-measured backtest rather than evidence about the future.</p>
       </div>
       <div class="qa">
         <p class="q">What would make you abandon this strategy?</p>
