@@ -24,6 +24,24 @@ def test_momentum_blend_averages_percentage_returns_across_lookbacks():
     assert result == pytest.approx((0.50 + 0.25 + 0.50) / 3)
 
 
+def test_momentum_blend_skip_measures_to_an_earlier_close_not_the_latest():
+    closes = [100.0] * 20
+    closes[10] = 80.0  # 5 trading days before the skip point
+    closes[15] = 100.0  # the "skip=4" reference close (index 20-1-4-1=15)
+    closes[19] = 200.0  # latest close -- must be ignored when skip=4
+
+    result = momentum_blend(closes, lookbacks=[5], skip=4)
+    # measures from index 15-5=10 (80.0) to index 15 (100.0), NOT to 19 (200.0)
+    assert result == pytest.approx((100.0 - 80.0) / 80.0)
+
+
+def test_momentum_blend_skip_zero_matches_default_behavior():
+    closes = [100.0, 110.0, 90.0, 130.0]
+    assert momentum_blend(closes, lookbacks=[2], skip=0) == momentum_blend(
+        closes, lookbacks=[2]
+    )
+
+
 def test_downside_deviation_ignores_positive_returns():
     returns = [0.05, 0.03, -0.02, 0.04, -0.04]
     # downside-only: [0, 0, -0.02, 0, -0.04] -> sqrt(mean([0, 0, 0.0004, 0, 0.0016]))

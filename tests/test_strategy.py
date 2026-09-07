@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from momentum.scoring import downside_deviation
+from momentum.scoring import downside_deviation, momentum_blend
 from momentum.strategy import MomentumStrategy
 
 
@@ -58,6 +58,22 @@ class _VolatilityRecordingStrategy(MomentumStrategy):
         d = self.stocks[0]
         if len(d) >= self.p.vol_lookback + 1:
             self.last_volatility = self._volatility(d)
+
+
+class _MomentumRecordingStrategy(MomentumStrategy):
+    """Records the momentum score at every bar, so the final (last-bar)
+    value can be checked against a manual reference calculation."""
+
+    def __init__(self):
+        super().__init__()
+        self.last_momentum = None
+
+    def next(self):
+        super().next()
+        d = self.stocks[0]
+        min_needed = self._max_momentum_lookback + self.p.momentum_skip + 1
+        if len(d) >= min_needed:
+            self.last_momentum = self._momentum_score(d)
 
 
 class _PositionTrackingStrategy(MomentumStrategy):
@@ -214,6 +230,38 @@ def test_volatility_indicator_uses_downside_deviation_not_full_stdev():
     assert strategy.last_volatility == pytest.approx(expected, rel=1e-6)
     full_stdev = np.std(daily_returns[-vol_lookback:])
     assert strategy.last_volatility < full_stdev
+
+
+def test_momentum_skip_excludes_the_most_recent_window_from_the_score():
+    n = 300
+    market = _uptrend(n, daily_return=0.001)
+    prices = _uptrend(n, daily_return=0.004, seed=6)
+    lookbacks = [60, 120, 200]
+    skip = 21
+
+    strategy = _run(
+        market,
+        {"UP": prices},
+        strategy_cls=_MomentumRecordingStrategy,
+        regime_ma_period=200,
+        ts_mom_lookback=200,
+        fip_lookback=200,
+        lookbacks=lookbacks,
+        vol_lookback=126,
+        skewness_lookback=90,
+        top_n=1,
+        rebalance_frequency=None,
+        momentum_skip=skip,
+    )
+
+    prices_arr = np.array(prices)
+    expected = momentum_blend(prices_arr, lookbacks=lookbacks, skip=skip)
+    assert strategy.last_momentum == pytest.approx(expected, rel=1e-6)
+    # Sanity check that skip is actually wired through, not silently ignored
+    # -- an uptrending series makes the skipped and unskipped scores clearly
+    # different rather than coincidentally equal.
+    unskipped = momentum_blend(prices_arr, lookbacks=lookbacks, skip=0)
+    assert strategy.last_momentum != pytest.approx(unskipped)
 
 
 def test_cap_weighted_sizing_favors_larger_market_cap():

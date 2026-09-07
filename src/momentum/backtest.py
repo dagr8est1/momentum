@@ -28,7 +28,7 @@ def _min_required_bars(strategy: StrategyConfig) -> int:
     indicators that would otherwise make backtrader enforce it implicitly.
     """
     return max(
-        max(strategy.lookbacks) + 1,
+        max(strategy.lookbacks) + strategy.momentum_skip + 1,
         strategy.vol_lookback + 1,
         strategy.skewness_lookback,
         strategy.fip_lookback + 1,
