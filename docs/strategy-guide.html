@@ -801,12 +801,14 @@
             Measured, not assumed: switching <code>rebalance_frequency</code> from <code>monthly</code>
             to <code>quarterly</code> on the full 1997–2026 point-in-time backtest moved CAGR, Sharpe,
             and turnover by less than 0.1 percentage points in either direction, for both
-            <code>top_n=5</code> and <code>top_n=10</code>. The reason is Trigger A: with ~500 eligible
-            names re-ranked every day, the top-N membership itself changes often enough that Trigger A
-            almost always fires before Trigger B's calendar window elapses — most of the ~30x/year
-            turnover comes from membership churn and regime-flip liquidations, not from the calendar
-            trigger. <code>quarterly</code> is supported and tested, but <code>monthly</code> remains
-            the default since it makes no measurable difference either way.
+            <code>top_n=5</code> and <code>top_n=10</code>. Counting actual rebalance events explains
+            why: Trigger A fires <strong>66x/year</strong> at <code>top_n=5</code> and
+            <strong>101x/year</strong> at <code>top_n=10</code> — a median gap of only 2–3 days between
+            rebalances — versus Trigger B's monthly/quarterly schedule. In well over 98% of rebalances,
+            Trigger A has already fired long before Trigger B's calendar window would have elapsed, so
+            the calendar cadence barely gets a turn to matter. <code>quarterly</code> is supported and
+            tested, but <code>monthly</code> remains the default since it makes no measurable difference
+            either way.
           </div>
           <p style="margin:0" class="code-ref">Implements: <code>MomentumStrategy._is_rebalance_due()</code> and the membership-diff check in <code>next()</code>.</p>
         </article>
