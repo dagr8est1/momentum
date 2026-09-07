@@ -846,14 +846,14 @@
           <th class="num">Strategy, top_n=10</th>
           <th class="num">Benchmark (SPY)</th>
         </tr>
-        <tr><td><strong>Cumulative return</strong></td><td class="num good-cell">1,223.7%</td><td class="num">910.6%</td><td class="num">1,157.1%</td></tr>
-        <tr><td><strong>CAGR</strong></td><td class="num good-cell">9.51%</td><td class="num">8.47%</td><td class="num">9.31%</td></tr>
+        <tr><td><strong>Cumulative return</strong></td><td class="num good-cell">1,219.1%</td><td class="num">915.0%</td><td class="num">1,157.1%</td></tr>
+        <tr><td><strong>CAGR</strong></td><td class="num good-cell">9.50%</td><td class="num">8.49%</td><td class="num">9.31%</td></tr>
         <tr><td><strong>Sharpe ratio</strong></td><td class="num">0.63</td><td class="num good-cell">0.64</td><td class="num">0.56</td></tr>
         <tr><td>Sortino ratio</td><td class="num">0.88</td><td class="num good-cell">0.91</td><td class="num">0.79</td></tr>
-        <tr><td>Volatility (ann.)</td><td class="num">16.75%</td><td class="num good-cell">14.26%</td><td class="num">19.38%</td></tr>
+        <tr><td>Volatility (ann.)</td><td class="num">16.74%</td><td class="num good-cell">14.26%</td><td class="num">19.38%</td></tr>
         <tr><td><strong>Max drawdown</strong></td><td class="num">−46.7%</td><td class="num good-cell">−43.5%</td><td class="num warn-cell">−55.2%</td></tr>
-        <tr><td>Best year</td><td class="num">+72.5%</td><td class="num">+43.2%</td><td class="num">+32.3%</td></tr>
-        <tr><td>Worst year</td><td class="num">−36.7%</td><td class="num">−29.5%</td><td class="num">−36.8%</td></tr>
+        <tr><td>Best year</td><td class="num">+72.9%</td><td class="num">+43.2%</td><td class="num">+32.3%</td></tr>
+        <tr><td>Worst year</td><td class="num">−36.6%</td><td class="num">−29.5%</td><td class="num">−36.8%</td></tr>
         <tr><td>Winning years</td><td class="num">71.4%</td><td class="num">78.6%</td><td class="num">79.3%</td></tr>
         <tr><td>Time in market</td><td class="num">77.0%</td><td class="num">77.0%</td><td class="num">100%</td></tr>
         <tr><td>Annualized turnover</td><td class="num">33.5x</td><td class="num">31.4x</td><td class="num">—</td></tr>
@@ -862,7 +862,7 @@
       <p>
         Read the two columns as a trade-off rather than a winner and a loser.
         <strong><code>top_n=5</code></strong> edges out the benchmark on raw return
-        (1,223.7% vs 1,157.1%; 9.51% vs 9.31% CAGR).
+        (1,219.1% vs 1,157.1%; 9.50% vs 9.31% CAGR).
         <strong><code>top_n=10</code></strong> gives up about a point of CAGR and ends
         <em>behind</em> the benchmark on cumulative return, but does so with markedly less risk —
         14.3% volatility against the benchmark's 19.4%, and a −43.5% worst drawdown against
@@ -900,7 +900,7 @@
       <h3 id="results-method">How these were produced</h3>
       <ul>
         <li><strong>Universe:</strong> <code>index:sp500_point_in_time</code> — actual month-by-month S&amp;P&nbsp;500 membership, so no survivorship or look-ahead bias in the candidate list (<a href="#slide-universe">slide&nbsp;2</a>).</li>
-        <li><strong>Data:</strong> daily OHLCV via <code>yfinance</code>, cached in <code>cache_data/prices.parquet</code>. Price history is loaded for every ticker that was ever a member, ~779 of which have retrievable data. Prices are auto-adjusted for both splits and dividends, so strategy and benchmark are compared on a consistent total-return basis.</li>
+        <li><strong>Data:</strong> daily OHLCV via <code>yfinance</code>, cached in <code>cache_data/prices_00..03.parquet</code>. Price history is loaded for every ticker that was ever a member, ~779 of which have retrievable data. Prices are auto-adjusted for both splits and dividends, so strategy and benchmark are compared on a consistent total-return basis.</li>
         <li><strong>Benchmark:</strong> SPY, measured over the strategy's own date range.</li>
         <li><strong>Starting capital:</strong> $100,000. Orders are market orders filled at the next bar's open.</li>
         <li><strong>Everything else:</strong> stock defaults — <code>lookbacks: [60, 120, 252]</code>, <code>vol_lookback: 126</code>, <code>skewness_lookback: 90</code>, <code>fip_lookback: 252</code>, <code>ts_mom_lookback: 200</code>, <code>regime_ma_period: 200</code>, weights <code>0.5 / 0.5 / 0.5</code>, <code>rebalance_frequency: monthly</code>, <code>sizing_method: inverse_vol</code>.</li>
@@ -1004,8 +1004,8 @@ uv run momentum run configs/sp500_pit_1997_2026_n10.yaml --output tearsheet_n10.
         </tr>
         <tr>
           <td><code>data.py</code></td>
-          <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by <strong>one combined, git-tracked parquet file</strong> (<code>cache_data/prices.parquet</code>) instead of per-ticker files; also caches shares outstanding (<code>cache_data/shares_outstanding.parquet</code>) for cap-weighted sizing</td>
-          <td>Long-format store (<code>ticker</code>, <code>Date</code>, OHLCV columns), loaded once per process and reused for every ticker in the run. Coverage-based, not time-based: a ticker's rows are reused only if their date range already covers the request; otherwise it downloads, merges, and rewrites the whole file. Checked into git specifically so a fresh clone has working data for any ticker/range someone has already fetched, with no network call. Tickers Yahoo has no data for at all (long-delisted names, dead symbols) are recorded in <code>cache_data/no_data_tickers.parquet</code> so they aren't re-attempted every run — with ~1,200 historical constituents, ~429 of which are permanently unavailable, that alone saves minutes per run. Shares outstanding is a single current snapshot per ticker (via <code>fast_info</code>), used as <code>shares × close(t)</code> to approximate historical market cap — cheap, but technically uses information not available on past rebalance dates.</td>
+          <td>Per-ticker OHLCV fetch via <code>yfinance</code>, backed by <strong>a git-tracked parquet store sharded across four files</strong> (<code>cache_data/prices_00..03.parquet</code>); also caches shares outstanding (<code>cache_data/shares_outstanding.parquet</code>) for cap-weighted sizing</td>
+          <td>Long-format store (<code>ticker</code>, <code>Date</code>, OHLCV columns) split across 4 shards keyed by <code>crc32(ticker) % 4</code>, loaded once per process. Coverage-based, not time-based: a ticker's rows are reused only if their date range already covers the request; otherwise it downloads, merges, and rewrites only that ticker's shard. Checked into git specifically so a fresh clone has working data for any ticker/range someone has already fetched, with no network call. Tickers Yahoo has no data for at all (long-delisted names, dead symbols) are recorded in <code>cache_data/no_data_tickers.parquet</code> so they aren't re-attempted every run — with ~1,200 historical constituents, ~429 of which are permanently unavailable, that alone saves minutes per run. Shares outstanding is a single current snapshot per ticker (via <code>fast_info</code>), used as <code>shares × close(t)</code> to approximate historical market cap — cheap, but technically uses information not available on past rebalance dates.</td>
         </tr>
         <tr>
           <td><code>backtest.py</code></td>
@@ -1051,7 +1051,7 @@ uv run momentum run configs/default.yaml --output results/tearsheet.html
 uv run pytest</code></pre>
       <p>
         A run reads OHLCV data for every ticker in the universe plus the benchmark from
-        <code>cache_data/prices.parquet</code> (checked into the repo) wherever it's already
+        <code>cache_data/prices_00..03.parquet</code> (checked into the repo) wherever it's already
         covered there, downloading and adding only what's missing, then executes the strategy
         over the configured date range and writes an HTML performance tearsheet (default
         <code>tearsheet.html</code>) comparing the strategy's returns to the benchmark's — with a
@@ -1100,7 +1100,7 @@ strategy:
         feeds after the minimum-history filter. Wall time is 10–15 minutes with a warm cache,
         almost entirely per-bar computation across ~700 feeds &times; ~7,200 trading days rather
         than data fetching. A fresh clone with no cache will be substantially slower the first
-        time, and whatever it fetches is written back to <code>cache_data/prices.parquet</code>.
+        time, and whatever it fetches is written back into the relevant cache shard.
       </div>
       <p>
         Every run writes a <strong>Summary Statistics</strong> block into the top of the
@@ -1126,7 +1126,7 @@ strategy:
         <tr><th>Field</th><th>Meaning</th><th>Default in <code>configs/default.yaml</code></th></tr>
         <tr><td><code>benchmark</code></td><td>Ticker used for the regime filter and as the tearsheet's comparison series</td><td><code>SPY</code></td></tr>
         <tr><td><code>start_date</code> / <code>end_date</code></td><td>Backtest date range</td><td><code>2022-01-01</code> → <code>2024-12-31</code></td></tr>
-        <tr><td><code>cache_dir</code></td><td>Directory holding the combined, git-tracked <code>prices.parquet</code> cache</td><td><code>cache_data</code></td></tr>
+        <tr><td><code>cache_dir</code></td><td>Directory holding the git-tracked, sharded <code>prices_NN.parquet</code> cache</td><td><code>cache_data</code></td></tr>
         <tr><td><code>universe.source</code></td><td><code>static</code>, <code>index:sp500</code>, or <code>index:sp500_point_in_time</code> (the last also needs <code>universe.constituents_file</code>)</td><td><code>static</code>, ~140 tickers</td></tr>
         <tr><td><code>strategy.lookbacks</code></td><td>Momentum blend horizons (trading days)</td><td><code>[60, 120, 252]</code></td></tr>
         <tr><td><code>strategy.top_n</code></td><td>Number of names held at once</td><td><code>10</code></td></tr>
@@ -1164,7 +1164,7 @@ strategy:
         <ul style="margin-bottom:0">
           <li><strong>Scoring math is framework-agnostic.</strong> <code>scoring.py</code> has zero <code>backtrader</code> imports specifically so the strategy's core logic can be unit tested in milliseconds, without a full backtest run.</li>
           <li><strong>Dual rebalance trigger, added deliberately.</strong> The original prototype only rebalanced on membership change, which meant inverse-vol weights went stale for names that stayed in the top-N for months. A monthly trigger was added alongside the membership-change trigger to keep sizing current.</li>
-          <li><strong>Cache is one combined, git-tracked file, and coverage-based rather than time-based.</strong> <code>data.py</code> keeps every ticker's OHLCV history in a single <code>cache_data/prices.parquet</code> (long format: <code>ticker</code>, <code>Date</code>, OHLCV), checked into the repo so a fresh clone has working data for anything already fetched — no network call needed. A ticker's rows are reused only when their date range already covers what's requested, not on a TTL, so re-running the same backtest twice does zero network calls the second time either way.</li>
+          <li><strong>Cache is git-tracked, sharded, and coverage-based rather than time-based.</strong> <code>data.py</code> keeps every ticker's OHLCV history in <code>cache_data/prices_00..03.parquet</code> (long format: <code>ticker</code>, <code>Date</code>, OHLCV), checked into the repo so a fresh clone has working data for anything already fetched — no network call needed. A ticker's rows are reused only when their date range already covers what's requested, not on a TTL, so re-running the same backtest twice does zero network calls the second time either way. Rows are assigned to a shard by <code>crc32(ticker)</code> so a run that touches a few tickers rewrites only the shards those tickers live in, rather than the whole dataset — which keeps each commit's diff proportional to what actually changed, and keeps every file well under hosting size limits. Prices are stored as <code>float32</code> with zstd compression; the discarded precision is far below any price's real significance.</li>
           <li><strong>Config validated at load time.</strong> Both missing required fields and an invalid <code>rebalance_frequency</code> raise immediately in <code>config.py</code>, rather than surfacing as a confusing failure deep inside a multi-minute backtest run.</li>
           <li><strong>Per-ticker data gaps degrade gracefully; benchmark gaps don't.</strong> A missing/empty ticker is logged and skipped — the backtest proceeds with the rest of the universe. A missing benchmark is a hard failure, because the regime filter has no fallback.</li>
           <li><strong>Turnover has to be tracked at the trade level, not derived from returns.</strong> Every other headline stat (CAGR, Sharpe, total return) is a pure function of the returns series and comes straight from <code>quantstats</code>. Turnover needs actual traded dollar value, which only exists inside <code>backtrader</code>'s order lifecycle — hence <code>MomentumStrategy.notify_order()</code> accumulating it, threaded back through <code>run_backtest()</code>'s return value into <code>reporting.py</code>.</li>
