@@ -104,7 +104,24 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
         )
     cerebro.adddata(bt.feeds.PandasData(dataname=benchmark_df, name=config.benchmark))
 
+    membership = None
+    if config.universe.get("source") == "index:sp500_point_in_time":
+        membership = load_point_in_time_membership(config.universe["constituents_file"])
+
     tickers = resolve_universe(config.universe)
+    if membership is not None:
+        # A ticker that was never actually a member at any point within
+        # [start_date, end_date] can never be selected by the strategy
+        # regardless of its price data — no need to ever load a feed for it.
+        # Includes the snapshot in effect *as of* start_date (not just ones
+        # strictly inside the range), matching MomentumStrategy's own as-of
+        # lookup in _current_members — otherwise a ticker whose only
+        # relevant snapshot predates start_date would be wrongly excluded.
+        preceding = membership.index[membership.index <= config.start_date]
+        lower_bound = preceding.max() if len(preceding) else config.start_date
+        ever_a_member = set().union(*membership.loc[lower_bound:config.end_date])
+        tickers = [t for t in tickers if t in ever_a_member]
+
     added_tickers = []
     listing_positions = {}
     for ticker in tickers:
@@ -140,10 +157,6 @@ def run_backtest(config: RunConfig) -> tuple[pd.Series, pd.Series, dict]:
         shares_outstanding = {
             t: load_shares_outstanding(t, cache_dir) for t in added_tickers
         }
-
-    membership = None
-    if config.universe.get("source") == "index:sp500_point_in_time":
-        membership = load_point_in_time_membership(config.universe["constituents_file"])
 
     cerebro.addstrategy(
         MomentumStrategy,
