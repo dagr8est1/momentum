@@ -1,7 +1,10 @@
-"""Temporary file with intentional issues to verify Copilot code review comments on PRs.
+"""Demo file with intentional issues, kept to re-demonstrate Copilot code review on demand.
 
 Not imported or wired into any real code path (and not named test_*.py, so pytest
-won't collect it). Delete once Copilot review has been confirmed working on this PR.
+won't collect it). Living under tests/generated/ is deliberate: Copilot code review
+automatically skips paths matching **/generated/**/*, so this file stays out of
+review results while it sits here. To re-trigger findings on a future PR, move it
+out of the generated/ directory (e.g. back to tests/) and push.
 """
 
 import json
