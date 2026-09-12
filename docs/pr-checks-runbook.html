@@ -289,6 +289,25 @@
   .toggle-card p { margin: 0; font-size: 13.5px; color: var(--text-muted); max-width: none; }
   .toggle-card .path { color: var(--text); }
 
+  .review-comment {
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-copilot);
+    border-radius: 8px;
+    padding: 12px 14px;
+    background: var(--surface);
+    box-shadow: var(--card-shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .review-comment .loc {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--accent-copilot);
+  }
+  .review-comment p { margin: 0; font-size: 13px; color: var(--text); max-width: none; }
+
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
 
@@ -425,6 +444,22 @@
       <span class="c-comment"># checkout, setup-python 3.12, setup-uv (cached)</span>
       <span class="c-punct">-</span> <span class="c-key">run</span><span class="c-punct">:</span> uv sync --group dev
       <span class="c-punct">-</span> <span class="c-key">run</span><span class="c-punct">:</span> uv run pytest</pre></div>
+
+      <div class="code-label" style="margin-top:18px"><span>Example &mdash; actual output before the probe was skipped</span><span>uv run pytest tests/test_ci_failure_check.py -q</span></div>
+      <div class="code-block"><pre>F                                                                        [100%]
+=================================== FAILURES ===================================
+_____________________________ test_ci_should_fail ______________________________
+
+    def test_ci_should_fail():
+&gt;       assert False, "Intentional failure to verify CI reports failed runs"
+E       AssertionError: Intentional failure to verify CI reports failed runs
+E       assert False
+
+tests/test_ci_failure_check.py:8: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_ci_failure_check.py::test_ci_should_fail - AssertionError: ...
+1 failed in 0.01s</pre></div>
+      <p class="section-note" style="margin-top:10px">The GitHub Actions run showed the same failure and turned the <strong>Run full test suite</strong> check red on the PR &mdash; confirming a real bug in this workflow would actually block the check, not silently pass.</p>
     </section>
 
     <section>
@@ -491,6 +526,34 @@
         </div>
         <figcaption>Same file, two paths: only the directory changes, and that alone decides whether Copilot's review touches it.</figcaption>
       </figure>
+
+      <div style="margin-top:22px">
+        <h3 style="font-size:13px;margin:0 0 4px">Example &mdash; what Copilot actually flagged</h3>
+        <p class="section-note" style="margin-bottom:12px">Real inline comments Copilot posted on <code>tests/generated/copilot_review_demo.py</code> before it moved under <code>generated/</code> &mdash; one per planted issue:</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div class="review-comment">
+            <span class="loc">copilot_review_demo.py:13</span>
+            <p>&ldquo;This hard-coded <code>sk-live-...</code> value is secret-shaped and will be exposed in git history and secret-scanning results even though this is a demo file.&rdquo;</p>
+          </div>
+          <div class="review-comment">
+            <span class="loc">copilot_review_demo.py:17</span>
+            <p>&ldquo;Concatenating <code>user_id</code> directly into SQL allows SQL injection if this helper is ever connected to a database. Use the database driver's parameterized-query API.&rdquo;</p>
+          </div>
+          <div class="review-comment">
+            <span class="loc">copilot_review_demo.py:26</span>
+            <p>&ldquo;This bare <code>except</code> suppresses every exception, including interrupts, and silently returns <code>None</code> for I/O or malformed JSON failures.&rdquo;</p>
+          </div>
+          <div class="review-comment">
+            <span class="loc">copilot_review_demo.py:31</span>
+            <p>&ldquo;Using a list as the default argument makes the same <code>buckets</code> object persist across calls, so totals from one invocation leak into later results.&rdquo;</p>
+          </div>
+          <div class="review-comment">
+            <span class="loc">copilot_review_demo.py:36</span>
+            <p>&ldquo;<code>get_first_n</code> returns <code>n + 1</code> items because <code>range(n + 1)</code> includes the endpoint; it also raises when <code>n</code> equals the input length.&rdquo;</p>
+          </div>
+        </div>
+        <p class="section-note" style="margin-top:12px">It also caught things nobody planted: on <code>full-tests.yml</code> it flagged that a fork-originated PR downgrades <code>GITHUB_TOKEN</code> to read-only (breaking the <code>gh pr edit</code> step) and that <code>actions/checkout</code> persists that token in git config by default, which a malicious feature branch could exfiltrate during <code>uv sync</code>/<code>pytest</code>. Real findings, not planted &mdash; worth acting on separately from this demo.</p>
+      </div>
     </section>
 
     <section>
