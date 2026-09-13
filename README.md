@@ -3,8 +3,6 @@
 A momentum investing strategy backtester built on `backtrader`, with
 config-driven runs, cached price data, and `quantstats` tearsheet reporting.
 
-📖 [Strategy overview & architecture guide](https://dagr8est1.github.io/momentum/strategy-guide.html)
-
 ## Setup
 
 ```bash
