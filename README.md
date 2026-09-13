@@ -3,6 +3,11 @@
 A momentum investing strategy backtester built on `backtrader`, with
 config-driven runs, cached price data, and `quantstats` tearsheet reporting.
 
+📖 **[Strategy overview & architecture guide](https://dagr8est1.github.io/momentum/strategy-guide.html)** — what the
+strategy does and why, every formula it uses, how it performed over a 28-year
+survivorship-bias-free S&P 500 backtest, and how the codebase fits together.
+Written to be followable without a finance background.
+
 ## Setup
 
 ```bash
